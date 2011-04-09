@@ -125,16 +125,27 @@ def get_new_note_name():
 			return get_note(name)
 	raise RuntimeError
 
-def touch_filename(filename, content=None):
+def touch_filename(filename, lcontent=None):
 	"""
 	Touch non-existing @filename
 
-	optionally write the bytestring @content into it
+	optionally write the bytestring @lcontent into it
 	"""
 	fd = os.open(filename, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0666)
-	if content:
-		os.write(fd, content)
+	if lcontent:
+		os.write(fd, lcontent)
 	os.close(fd)
+
+def overwrite_filename(filename, lcontent):
+	"""
+	Overwrite @filename
+
+	write the bytestring @lcontent into it
+	"""
+	fd = os.open(filename, os.O_CREAT| os.O_TRUNC | os.O_WRONLY, 0666)
+	os.write(fd, lcontent)
+	os.close(fd)
+
 
 def get_relative_name(path, relativeto):
 	display_name_long = glib.filename_display_name(path)
@@ -157,6 +168,8 @@ class MainInstance (ExportedGObject):
 			(gobject.TYPE_STRING, )),
 		"title-updated": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
 			(gobject.TYPE_STRING, gobject.TYPE_STRING )),
+		"note-contents-changed": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
+			(gobject.TYPE_STRING, )),
 	}
 	def __init__(self):
 		"""Create a new service on the Session Bus
@@ -234,6 +247,23 @@ class MainInstance (ExportedGObject):
 		except ValueError:
 			return ""
 		return self.ensure_note_title(filename)
+
+	@dbus.service.method(interface_name, in_signature="ss", out_signature="b")
+	def SetNoteContents(self, uri, contents):
+		try:
+			filename = get_filename_for_note_uri(uri)
+		except ValueError:
+			return False
+		if is_note(filename):
+			try:
+				lcontents = tonoteencoding(contents)
+			except UnicodeEncodeError:
+				return False
+			overwrite_filename(filename, lcontents)
+			self.emit("note-contents-changed", filename)
+			return True
+		else:
+			return False
 
 	def reload_filemodel(self, model):
 		notes_dir = get_notesdir()
