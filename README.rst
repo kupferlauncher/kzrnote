@@ -20,4 +20,11 @@ Envisioned features are the basics of Gnote: Spatial windows (remembering
 size and position), and then we want some vim customization too and better
 Kupfer integration.
 
+Install it using::
+
+    ./install
+
+The install script uses the environment variables PYTHON, PREFIX, DESTDIR
+if they need to be set to non-default values.
+
 .. vim: ft=rst tw=76 sts=4
