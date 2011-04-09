@@ -39,8 +39,22 @@ def log(*args):
 ## Needs directory parameters
 ## set wm=2  wrapmargin för automatisk wrapping till fönsterstorlek
 ## Autosave all the time:  au CursorHold <buffer> w
-VIM_EXTRA_FLAGS=['-c', 'set guioptions-=m guioptions-=T shortmess+=a', '-c', 'set wm=2', '-c', 'au InsertLeave,CursorHold ?* silent! w', '-c', 'set updatetime=1000']
-VIMSWPARGS=['-c', 'set undodir=%s directory=%s backupdir=%s']
+VIMNOTE_SOURCE="""
+" hide clutter (menubar and toolbar)
+set guioptions-=m guioptions-=T shortmess+=a
+" wrapmargin
+set wm=2
+" autosave
+au InsertLeave,CursorHold ?* silent! w
+set updatetime=1000
+"""
+
+VIMNOTE_SWPSOURCE="""
+set undodir=%s directory=%s backupdir=%s
+"""
+SOURCE_FILE="%s.vim" % APPNAME
+
+VIM_EXTRA_FLAGS=[]
 
 
 #:set guioptions=-T
@@ -529,18 +543,9 @@ class MainInstance (ExportedGObject):
 		window.add(socket)
 		socket.show()
 
-		vimswpdir = os.path.join(get_notesdir(), SWPDIR)
-		try:
-			os.makedirs(vimswpdir, 0o700)
-		except EnvironmentError:
-			pass
-
-		swpargs = list(VIMSWPARGS)
-		swpargs[-1] = swpargs[-1] % (vimswpdir, vimswpdir, vimswpdir)
-
 		argv = [VIM, '-g', '-f', '--socketid', '%s' % socket.get_id()]
 		argv.extend(VIM_EXTRA_FLAGS)
-		argv.extend(swpargs)
+		argv.extend(['-c', 'so %s' % self.write_vimrc_file()])
 		argv.extend(extra_args)
 
 		log("Spawning", argv)
@@ -549,6 +554,18 @@ class MainInstance (ExportedGObject):
 						 flags=glib.SPAWN_SEARCH_PATH|glib.SPAWN_DO_NOT_REAP_CHILD)
 		glib.child_watch_add(pid, self.on_vim_exit, window)
 		return window
+
+	def write_vimrc_file(self):
+		vimswpdir = os.path.join(get_notesdir(), SWPDIR)
+		try:
+			os.makedirs(vimswpdir, 0o700)
+		except EnvironmentError:
+			pass
+		rpath = os.path.join(get_cache_dir(), SOURCE_FILE)
+		with open(rpath, "wb") as runtimefobj:
+			runtimefobj.write(VIMNOTE_SOURCE)
+			runtimefobj.write(VIMNOTE_SWPSOURCE % (vimswpdir, vimswpdir, vimswpdir))
+		return rpath
 
 	def new_vimdow_preloaded(self, name, filepath):
 		if not self.preload_ids:
