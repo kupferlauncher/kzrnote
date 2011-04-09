@@ -61,6 +61,31 @@ def get_cache_dir():
 URL_SCHEME = "note"
 URL_NETLOC = "vimnote"
 
+
+### Should we use UTF-8 or locale encoding?
+##NOTE_ENCODING="UTF-8"
+## Right now we are using locale encoding
+
+def tonoteencoding(ustr, errors=True):
+	"""
+	Return a byte string in the note encoding from @ustr
+	"""
+	enc = locale.getpreferredencoding(do_setlocale=False)
+	if errors:
+		return ustr.encode(enc)
+	else:
+		return ustr.encode(enc, 'replace')
+
+def fromnoteencoding(lstr, errors=True):
+	"""
+	Return a unicode string from the note-encoded @lstr
+	"""
+	enc = locale.getpreferredencoding(do_setlocale=False)
+	if errors:
+		return lstr.decode(enc)
+	else:
+		return lstr.decode(enc, 'replace')
+
 def toasciiuri(uuri):
 	return uuri.encode("utf-8") if isinstance(uuri, unicode) else uuri
 
@@ -100,17 +125,16 @@ def get_new_note_name():
 			return get_note(name)
 	raise RuntimeError
 
-def touch_filename(filename):
-	fd = os.open(filename, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0666)
-	os.close(fd)
+def touch_filename(filename, content=None):
+	"""
+	Touch non-existing @filename
 
-def fromlocale_flatten(lstr):
+	optionally write the bytestring @content into it
 	"""
-	Get unicode from locale bytestring @lstr,
-	flatten if needed
-	"""
-	enc = locale.getpreferredencoding(do_setlocale=False)
-	return lstr.decode(enc, 'replace')
+	fd = os.open(filename, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0666)
+	if content:
+		os.write(fd, content)
+	os.close(fd)
 
 def get_relative_name(path, relativeto):
 	display_name_long = glib.filename_display_name(path)
@@ -159,16 +183,18 @@ class MainInstance (ExportedGObject):
 	def unregister(self):
 		dbus.Bus().release_name(server_name)
 
-	@dbus.service.method(interface_name, in_signature="s", out_signature="s")
-	def CreateNote(self, uri):
-		try:
-			filename = get_filename_for_note_uri(uri)
-		except ValueError:
-			return ""
-		if is_note(filename):
-			return ""
+	@dbus.service.method(interface_name, in_signature="", out_signature="s")
+	def CreateNote(self):
 		new_note = get_new_note_name()
+		assert not is_note(new_note)
 		touch_filename(new_note)
+		return get_note_uri(new_note)
+
+	@dbus.service.method(interface_name, in_signature="s", out_signature="s")
+	def CreateNamedNote(self, title):
+		new_note = get_new_note_name()
+		assert not is_note(new_note)
+		touch_filename(new_note, tonoteencoding(title))
 		return get_note_uri(new_note)
 
 	@dbus.service.method(interface_name, in_signature="s", out_signature="b")
@@ -226,7 +252,7 @@ class MainInstance (ExportedGObject):
 		try:
 			with open(filepath, "r") as f:
 				for firstline in f:
-					ufirstline = fromlocale_flatten(firstline).strip()
+					ufirstline = fromnoteencoding(firstline, errors=False).strip()
 					if ufirstline:
 						return ufirstline[:MAXTITLELEN]
 					break
