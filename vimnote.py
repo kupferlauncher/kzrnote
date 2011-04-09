@@ -68,7 +68,7 @@ def get_filename_for_note_uri(uri):
 	does not check if it exists
 	"""
 	parse = urlparse.urlparse(uri)
-	if parse.scheme != URL_SCHEME or parse.netlog != URL_NETLOC:
+	if parse.scheme != URL_SCHEME or parse.netloc != URL_NETLOC:
 		raise ValueError("Not a %s://%s/.. URI" % (URL_SCHEME, URL_NETLOC))
 	if len(parse.path) < 2:
 		raise ValueError("Invalid path in %s" % uri)
@@ -159,17 +159,24 @@ class MainInstance (ExportedGObject):
 
 	@dbus.service.method(interface_name, in_signature="s", out_signature="s")
 	def GetNoteTitle(self, uri):
-		pass
-
+		try:
+			filename = get_filename_for_note_uri(uri)
+		except ValueError:
+			return ""
+		return self.ensure_note_title(filename)
 
 	def reload_filemodel(self, model):
 		notes_dir = get_notesdir()
 		model.clear()
 		for filename in get_note_paths():
-			if not filename in self.file_names:
-				self.reload_file_note_title(filename)
-			display_name = self.file_names[filename]
+			display_name = self.ensure_note_title(filename)
 			model.append((filename, display_name))
+
+	def ensure_note_title(self, filename):
+		"""make sure we have a title for @filename, and return it for convenience"""
+		if not filename in self.file_names:
+			self.reload_file_note_title(filename)
+		return self.file_names[filename]
 
 	def reload_file_note_title(self, filename):
 		self.file_names[filename] = self.extract_note_title(filename)
