@@ -82,6 +82,8 @@ def get_cache_dir():
 
 URL_SCHEME = "note"
 URL_NETLOC = "vimnote"
+## All uuids we use are this length (characters)
+FILENAME_LEN = 36
 
 
 ### Should we use UTF-8 or locale encoding?
@@ -131,14 +133,15 @@ def get_note_paths():
 	D = get_notesdir()
 	for x in os.listdir(D):
 		path = os.path.join(D, x)
-		if os.path.isfile(path):
+		if is_note(path):
 			yield path
 
 def get_note(notename):
 	return os.path.join(get_notesdir(), notename)
 
 def is_note(filename):
-	return filename.startswith(get_notesdir()) and os.path.exists(filename)
+	return (filename.startswith(get_notesdir()) and os.path.exists(filename) and
+	        len(os.path.basename(filename)) == FILENAME_LEN)
 
 def get_new_note_name():
 	for retry in xrange(1000):
