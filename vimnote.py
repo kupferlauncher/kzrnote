@@ -266,6 +266,18 @@ class MainInstance (ExportedGObject):
 			return ""
 		return self.ensure_note_title(filename)
 
+	@dbus.service.method(interface_name, in_signature="s", out_signature="u")
+	def GetNoteChangeDate(self, uri):
+		try:
+			filename = get_filename_for_note_uri(uri)
+		except ValueError:
+			return 0
+		try:
+			stat_res = os.stat(filename)
+		except OSError:
+			return 0
+		return stat_res.st_mtime
+
 	@dbus.service.method(interface_name, in_signature="s", out_signature="s")
 	def GetNoteContents(self, uri):
 		try:
@@ -296,6 +308,11 @@ class MainInstance (ExportedGObject):
 			return True
 		else:
 			return False
+
+	@dbus.service.method(interface_name, in_signature="s", out_signature="as")
+	def GetAllNotesWithTag(self, tagname):
+		## FIXME
+		return []
 
 	def reload_filemodel(self, model):
 		notes_dir = get_notesdir()
