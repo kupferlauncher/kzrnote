@@ -90,9 +90,6 @@ FILENAME_LEN = 36 + len(NOTE_SUFFIX)
 ##NOTE_ENCODING="UTF-8"
 ## Right now we are using locale encoding
 
-class InvalidNoteURI:
-	pass
-
 def tolocaleencoding(ustr, errors=True):
 	enc = locale.getpreferredencoding(do_setlocale=False)
 	if errors:
@@ -120,9 +117,12 @@ def toasciiuri(uuri):
 	return uuri.encode("utf-8") if isinstance(uuri, unicode) else uuri
 
 def note_uuid_from_filename(filename):
+	"""
+	Raises ValueError for invalid filename
+	"""
 	if filename.endswith(NOTE_SUFFIX):
 		return os.path.basename(filename)[:-len(NOTE_SUFFIX)]
-	raise InvalidNoteURI
+	raise ValueError
 
 def get_note_uri(filepath):
 	return "%s://%s/%s" % (URL_SCHEME, URL_NETLOC, note_uuid_from_filename(filepath))
@@ -276,23 +276,21 @@ class MainInstance (ExportedGObject):
 	@dbus.service.method(interface_name, in_signature="", out_signature="s")
 	def CreateNote(self):
 		new_note = get_new_note_name()
-		assert not is_note(new_note)
 		touch_filename(new_note)
 		return get_note_uri(new_note)
 
 	@dbus.service.method(interface_name, in_signature="s", out_signature="s")
 	def CreateNamedNote(self, title):
 		new_note = get_new_note_name()
-		assert not is_note(new_note)
 		touch_filename(new_note, tonoteencoding(title))
 		return get_note_uri(new_note)
 
 	@dbus.service.method(interface_name, in_signature="s", out_signature="b")
 	def DeleteNote(self, uri):
-		try:
-			filename = get_filename_for_note_uri(uri)
-		except ValueError:
-			return False
+		"""
+		Raises ValueError on invalid @uri
+		"""
+		filename = get_filename_for_note_uri(uri)
 		if is_note(filename):
 			self.delete_note(filename)
 			return True
@@ -301,10 +299,10 @@ class MainInstance (ExportedGObject):
 
 	@dbus.service.method(interface_name, in_signature="s", out_signature="b")
 	def DisplayNote(self, uri):
-		try:
-			filename = get_filename_for_note_uri(uri)
-		except ValueError:
-			return False
+		"""
+		Raises ValueError on invalid @uri
+		"""
+		filename = get_filename_for_note_uri(uri)
 		if is_note(filename):
 			self.display_note_by_file(filename)
 			return True
@@ -313,10 +311,10 @@ class MainInstance (ExportedGObject):
 
 	@dbus.service.method(interface_name, in_signature="s", out_signature="b")
 	def NoteExists(self, uri):
-		try:
-			filename = get_filename_for_note_uri(uri)
-		except ValueError:
-			return False
+		"""
+		Raises ValueError on invalid @uri
+		"""
+		filename = get_filename_for_note_uri(uri)
 		return is_note(filename)
 
 	@dbus.service.method(interface_name, in_signature="", out_signature="as")
@@ -328,30 +326,30 @@ class MainInstance (ExportedGObject):
 
 	@dbus.service.method(interface_name, in_signature="s", out_signature="s")
 	def GetNoteTitle(self, uri):
-		try:
-			filename = get_filename_for_note_uri(uri)
-		except ValueError:
-			return ""
-		return self.ensure_note_title(filename)
+		"""
+		Raises ValueError on invalid @uri
+		"""
+		filename = get_filename_for_note_uri(uri)
+		if is_note(filename):
+			return self.ensure_note_title(filename)
+		return ""
 
 	@dbus.service.method(interface_name, in_signature="s", out_signature="u")
 	def GetNoteChangeDate(self, uri):
-		try:
-			filename = get_filename_for_note_uri(uri)
-		except ValueError:
-			return 0
-		try:
-			stat_res = os.stat(filename)
-		except OSError:
-			return 0
+		"""
+		Raises ValueError on invalid @uri
+		Raises OSError for internal filesystem error
+		"""
+		filename = get_filename_for_note_uri(uri)
+		stat_res = os.stat(filename)
 		return stat_res.st_mtime
 
 	@dbus.service.method(interface_name, in_signature="s", out_signature="s")
 	def GetNoteContents(self, uri):
-		try:
-			filename = get_filename_for_note_uri(uri)
-		except ValueError:
-			return ""
+		"""
+		Raises ValueError on invalid @uri
+		"""
+		filename = get_filename_for_note_uri(uri)
 		if is_note(filename):
 			try:
 				return fromnoteencoding(read_filename(filename))
@@ -362,10 +360,10 @@ class MainInstance (ExportedGObject):
 
 	@dbus.service.method(interface_name, in_signature="ss", out_signature="b")
 	def SetNoteContents(self, uri, contents):
-		try:
-			filename = get_filename_for_note_uri(uri)
-		except ValueError:
-			return False
+		"""
+		Raises ValueError on invalid @uri
+		"""
+		filename = get_filename_for_note_uri(uri)
 		if is_note(filename):
 			try:
 				lcontents = tonoteencoding(contents)
