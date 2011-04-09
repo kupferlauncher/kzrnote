@@ -1,0 +1,38 @@
+#!/bin/sh
+
+## Script to write in the config variables
+## and copy the files to their install locations,
+## using $PREFIX, $DESTDIR, $PYTHON from environment
+
+: ${PREFIX:=/usr/local}
+: ${DATADIR:=$PREFIX/share}
+: ${BINDIR:=$PREFIX/bin}
+: ${DBUSDIR=$DATADIR/dbus-1/services}
+: ${DESTDIR:=}
+: ${PYTHON:=$(which python)}
+: ${INSTALL:=install -c}
+
+set -e
+exec >&2
+
+DBINDIR=$DESTDIR$BINDIR
+DDBUSDIR=$DESTDIR$DBUSDIR
+
+echo "Installing:"
+echo "Binary: $DBINDIR"
+echo "D-Bus services: $DDBUSDIR"
+echo "Using python: $PYTHON"
+
+## Make vimnote
+TMPNAME="vimnote.$$"
+echo "#!$PYTHON" > $TMPNAME
+cat "vimnote.py" >> $TMPNAME
+$INSTALL -v -D $TMPNAME "$DBINDIR/vimnote"
+rm -rf $TMPNAME
+
+## Make the service file
+SVC="se.kaizer.vimnote.service"
+TMPNAME="$SVC.$$"
+sed -e "s_@BINDIR@_${BINDIR}_" $SVC.in > $TMPNAME
+$INSTALL -v -D $TMPNAME "$DDBUSDIR/$SVC"
+rm -rf $TMPNAME
