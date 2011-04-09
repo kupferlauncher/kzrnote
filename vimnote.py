@@ -8,8 +8,12 @@ import locale
 import os
 import sys
 import time
+import urlparse
 import uuid
 
+import dbus
+from dbus.gobject_service import ExportedGObject
+from dbus.mainloop.glib import DBusGMainLoop
 import gtk
 import gio
 import gobject
@@ -48,7 +52,29 @@ def get_cache_dir():
 		pass
 	return cachedir
 
-def get_notes():
+## make uris just  like gnote
+## template  note://vimnote/1823-aa8s9df-1231290
+
+URL_SCHEME = "note"
+URL_NETLOC = "vimnote"
+
+def get_note_uri(filepath):
+	return "%s://%s/%s" % (URL_SCHEME, URL_NETLOC, os.path.basename(filepath))
+
+def get_filename_for_note_uri(uri):
+	"""
+	Raises ValueError on invalid url
+
+	does not check if it exists
+	"""
+	parse = urlparse.urlparse(uri)
+	if parse.scheme != URL_SCHEME or parse.netlog != URL_NETLOC:
+		raise ValueError("Not a %s://%s/.. URI" % (URL_SCHEME, URL_NETLOC))
+	if len(parse.path) < 2:
+		raise ValueError("Invalid path in %s" % uri)
+	return os.path.join(get_notesdir(), os.path.basename(parse.path))
+
+def get_note_paths():
 	D = get_notesdir()
 	for x in os.listdir(D):
 		path = os.path.join(D, x)
@@ -83,13 +109,33 @@ def get_relative_name(path, relativeto):
 		return display_name_long.replace(homedir, "~", 1)
 	return display_name_long
 
-class MainInstance (gobject.GObject):
+server_name = "se.kaizer.%s" % APPNAME
+interface_name = "se.kaizer.%s" % APPNAME
+object_name = "/se/kaizer/%s" % APPNAME
+
+
+class MainInstance (ExportedGObject):
 	__gsignals__ = {
 		"note-deleted": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
 			(gobject.TYPE_STRING, )),
 	}
 	def __init__(self):
-		gobject.GObject.__init__(self)
+		"""Create a new service on the Session Bus
+		"""
+		try:
+			session_bus = dbus.Bus()
+		except dbus.DBusException:
+			raise RuntimeError("No D-Bus connection")
+		if session_bus.name_has_owner(server_name):
+			log("An instance already running, exiting...")
+			raise SystemExit(1)
+
+		bus_name = dbus.service.BusName(server_name, bus=session_bus)
+		super(MainInstance, self).__init__(conn=session_bus,
+		                                   object_path=object_name,
+		                                   bus_name=bus_name)
+		#gobject.GObject.__init__(self)
+
 		self.open_files = {}
 		self.file_names = {}
 		self.preload_ids = {}
@@ -97,10 +143,29 @@ class MainInstance (gobject.GObject):
 		self.status_icon = None
 		self.connect("note-deleted", self.on_note_deleted)
 
+	def unregister(self):
+		dbus.Bus().release_name(server_name)
+
+	@dbus.service.method(interface_name, in_signature="s", out_signature="b")
+	def DisplayNote(self, uri):
+		pass
+
+	@dbus.service.method(interface_name, in_signature="", out_signature="as")
+	def ListAllNotes(self):
+		all_notes = []
+		for note in get_note_paths():
+			all_notes.append(get_note_uri(note))
+		return all_notes
+
+	@dbus.service.method(interface_name, in_signature="s", out_signature="s")
+	def GetNoteTitle(self, uri):
+		pass
+
+
 	def reload_filemodel(self, model):
 		notes_dir = get_notesdir()
 		model.clear()
-		for filename in get_notes():
+		for filename in get_note_paths():
 			if not filename in self.file_names:
 				self.reload_file_note_title(filename)
 			display_name = self.file_names[filename]
@@ -339,6 +404,7 @@ def setup_locale():
 
 def main(argv):
 	setup_locale()
+	DBusGMainLoop(set_as_default=True)
 	glib.set_application_name(APPNAME)
 	glib.set_prgname(APPNAME)
 	m = MainInstance()
