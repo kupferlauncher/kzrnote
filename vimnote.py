@@ -309,6 +309,16 @@ class MainInstance (ExportedGObject):
 		else:
 			return False
 
+	@dbus.service.method(interface_name, in_signature="s", out_signature="s")
+	def FindNote(self, linked_title):
+		"""
+		Returns "" for not found
+		"""
+		filename = self.has_note_by_title(linked_title)
+		if filename and is_note(filename):
+			return get_note_uri(filename)
+		return ""
+
 	@dbus.service.method(interface_name, in_signature="s", out_signature="b")
 	def NoteExists(self, uri):
 		"""
@@ -429,6 +439,18 @@ class MainInstance (ExportedGObject):
 		for filename in get_note_paths():
 			display_name = self.ensure_note_title(filename)
 			model.append((filename, display_name))
+
+	def has_note_by_title(self, utitle):
+		"""
+		Return (the first) filename if exists, None otherwise
+
+		Titles longer than the max length are truncated(!)
+		"""
+		utitle = utitle[:MAXTITLELEN]
+		for filename, note_title in self.file_names.iteritems():
+			if note_title == utitle:
+				return filename
+		return None
 
 	def ensure_note_title(self, filename):
 		"""make sure we have a title for @filename, and return it for convenience"""
