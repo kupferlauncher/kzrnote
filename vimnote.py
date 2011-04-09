@@ -499,9 +499,24 @@ class MainInstance (ExportedGObject):
 		os.rename(filepath, os.path.join(attic_dir, os.path.basename(filepath)))
 		self.emit("note-deleted", filepath)
 
+	def close_all(self):
+		"""
+		Close all open windows and hidden windows
+		"""
+		self.window.hide()
+		for filepath in list(self.open_files):
+			log("closing", filepath)
+			self.open_files.pop(filepath).destroy()
+		for preload_id in list(self.preload_ids):
+			log("closing", preload_id)
+			self.preload_ids.pop(preload_id).destroy()
+		while gtk.events_pending():
+			gtk.main_iteration()
+		time.sleep(0.5)
+
 	def on_note_deleted(self, sender, filepath):
 		if filepath in self.open_files:
-			self.open_files[filepath].destroy()
+			self.open_files.pop(filepath).destroy()
 
 	def on_note_title_updated(self, sender, filepath, new_title):
 		if filepath in self.open_files:
@@ -655,7 +670,12 @@ def main(argv):
 	glib.idle_add(m.setup_gui)
 	glib.idle_add(m.handle_commandline, argv[0], argv[1:])
 	ensure_notesdir()
-	return gtk.main()
+	try:
+		gtk.main()
+	finally:
+		m.unregister()
+		m.close_all()
+
 
 
 if __name__ == '__main__':
