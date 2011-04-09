@@ -100,6 +100,10 @@ def get_new_note_name():
 			return get_note(name)
 	raise RuntimeError
 
+def touch_filename(filename):
+	fd = os.open(filename, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0666)
+	os.close(fd)
+
 def fromlocale_flatten(lstr):
 	"""
 	Get unicode from locale bytestring @lstr,
@@ -155,6 +159,18 @@ class MainInstance (ExportedGObject):
 	def unregister(self):
 		dbus.Bus().release_name(server_name)
 
+	@dbus.service.method(interface_name, in_signature="s", out_signature="s")
+	def CreateNote(self, uri):
+		try:
+			filename = get_filename_for_note_uri(uri)
+		except ValueError:
+			return ""
+		if is_note(filename):
+			return ""
+		new_note = get_new_note_name()
+		touch_filename(new_note)
+		return get_note_uri(new_note)
+
 	@dbus.service.method(interface_name, in_signature="s", out_signature="b")
 	def DisplayNote(self, uri):
 		try:
@@ -166,6 +182,14 @@ class MainInstance (ExportedGObject):
 			return True
 		else:
 			return False
+
+	@dbus.service.method(interface_name, in_signature="s", out_signature="b")
+	def NoteExists(self, uri):
+		try:
+			filename = get_filename_for_note_uri(uri)
+		except ValueError:
+			return False
+		return is_note(filename)
 
 	@dbus.service.method(interface_name, in_signature="", out_signature="as")
 	def ListAllNotes(self):
