@@ -646,7 +646,7 @@ class MainInstance (ExportedGObject):
 	def new_vimdow(self, name, filepath):
 		if self.preload_ids:
 			self.new_vimdow_preloaded(name, filepath)
-			glib.timeout_add_seconds(5, self.preload)
+			glib.timeout_add_seconds(1, self.preload)
 			return
 		window = self.start_vim_hidden([filepath])
 		window.set_title(name)
