@@ -82,13 +82,16 @@ def get_cache_dir():
 
 URL_SCHEME = "note"
 URL_NETLOC = "vimnote"
+NOTE_SUFFIX = ".note"
 ## All uuids we use are this length (characters)
-FILENAME_LEN = 36
-
+FILENAME_LEN = 36 + len(NOTE_SUFFIX)
 
 ### Should we use UTF-8 or locale encoding?
 ##NOTE_ENCODING="UTF-8"
 ## Right now we are using locale encoding
+
+class InvalidNoteURI:
+	pass
 
 def tonoteencoding(ustr, errors=True):
 	"""
@@ -113,8 +116,13 @@ def fromnoteencoding(lstr, errors=True):
 def toasciiuri(uuri):
 	return uuri.encode("utf-8") if isinstance(uuri, unicode) else uuri
 
+def note_uuid_from_filename(filename):
+	if filename.endswith(NOTE_SUFFIX):
+		return os.path.basename(filename)[:-len(NOTE_SUFFIX)]
+	raise InvalidNoteURI
+
 def get_note_uri(filepath):
-	return "%s://%s/%s" % (URL_SCHEME, URL_NETLOC, os.path.basename(filepath))
+	return "%s://%s/%s" % (URL_SCHEME, URL_NETLOC, note_uuid_from_filename(filepath))
 
 def get_filename_for_note_uri(uri):
 	"""
@@ -127,7 +135,7 @@ def get_filename_for_note_uri(uri):
 		raise ValueError("Not a %s://%s/.. URI" % (URL_SCHEME, URL_NETLOC))
 	if len(parse.path) < 2:
 		raise ValueError("Invalid path in %s" % uri)
-	return os.path.join(get_notesdir(), os.path.basename(parse.path))
+	return os.path.join(get_notesdir(), os.path.basename(parse.path)) + NOTE_SUFFIX
 
 def get_note_paths():
 	D = get_notesdir()
@@ -136,12 +144,13 @@ def get_note_paths():
 		if is_note(path):
 			yield path
 
-def get_note(notename):
-	return os.path.join(get_notesdir(), notename)
+def get_note(note_uuid):
+	return os.path.join(get_notesdir(), note_uuid + NOTE_SUFFIX)
 
 def is_note(filename):
 	return (filename.startswith(get_notesdir()) and os.path.exists(filename) and
-	        len(os.path.basename(filename)) == FILENAME_LEN)
+	        len(os.path.basename(filename)) == FILENAME_LEN and
+	        filename.endswith(NOTE_SUFFIX))
 
 def get_new_note_name():
 	for retry in xrange(1000):
