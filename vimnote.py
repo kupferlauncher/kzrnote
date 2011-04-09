@@ -190,6 +190,25 @@ def read_filename(filename):
 			read.append(r)
 	return "".join(read)
 
+def try_register_pr_pdeathsig():
+	"""
+	Register PR_SET_PDEATHSIG (linux-only) for the calling process
+	which is a signal delivered when its parent dies.
+
+	This should ensure child processes die with the parent.
+	"""
+	PR_SET_PDEATHSIG=1
+	SIGHUP=1
+	try:
+		import ctypes
+	except ImportError:
+		return
+	try:
+		libc = ctypes.CDLL("libc.so.6")
+		libc.prctl(PR_SET_PDEATHSIG, SIGHUP)
+	except (AttributeError, OSError):
+		pass
+
 def get_relative_name(path, relativeto):
 	display_name_long = glib.filename_display_name(path)
 	rel_display = glib.filename_display_name(relativeto)
@@ -553,10 +572,13 @@ class MainInstance (ExportedGObject):
 
 		log("Spawning", argv)
 		pid, sin, sout, serr = \
-				glib.spawn_async(argv,
+				glib.spawn_async(argv, child_setup=self.on_spawn_child_setup,
 						 flags=glib.SPAWN_SEARCH_PATH|glib.SPAWN_DO_NOT_REAP_CHILD)
 		glib.child_watch_add(pid, self.on_vim_exit, window)
 		return window
+
+	def on_spawn_child_setup(self):
+		try_register_pr_pdeathsig()
 
 	def write_vimrc_file(self):
 		vimswpdir = os.path.join(get_notesdir(), SWPDIR)
