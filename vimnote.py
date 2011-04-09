@@ -3,8 +3,10 @@ APPNAME = "vimnote"
 VIM = 'vim'
 ICONNAME = 'vim'
 
+import locale
 import os
 import sys
+import uuid
 
 import gtk
 import gio
@@ -28,13 +30,21 @@ def get_notes():
 def get_note(notename):
 	return os.path.join(get_notesdir(), notename)
 
-def get_new_note_name(base):
+def get_new_note_name():
 	for retry in xrange(1000):
-		name = base if not retry else "%s %d" % (base, retry)
+		#name = base if not retry else "%s %d" % (base, retry)
+		name = str(uuid.uuid4())
 		if not os.path.exists(get_note(name)):
 			return get_note(name)
 	raise RuntimeError
 
+def fromlocale_flatten(lstr):
+	"""
+	Get unicode from locale bytestring @lstr,
+	flatten if needed
+	"""
+	enc = locale.getpreferredencoding(do_setlocale=False)
+	return lstr.decode(enc, 'replace')
 
 def get_relative_name(path, relativeto):
 	display_name_long = glib.filename_display_name(path)
@@ -49,14 +59,32 @@ def get_relative_name(path, relativeto):
 class MainInstance (object):
 	def __init__(self):
 		self.open_files = {}
+		self.file_names = {}
 
 	def reload_filemodel(self, model):
-		print "Reloading files"
 		notes_dir = get_notesdir()
 		model.clear()
 		for filename in get_notes():
-			print filename
-			model.append((filename, get_relative_name(filename, notes_dir)))
+			if not filename in self.file_names:
+				self.reload_file_note_title(filename)
+			display_name = self.file_names[filename]
+			model.append((filename, display_name))
+
+	def reload_file_note_title(self, filename):
+		self.file_names[filename] = self.extract_note_title(filename)
+
+	def extract_note_title(self, filepath):
+		try:
+			with open(filepath, "r") as f:
+				for firstline in f:
+					ufirstline = fromlocale_flatten(firstline).strip()
+					if ufirstline:
+						return ufirstline
+					break
+		except EnvironmentError:
+			pass
+		return NEW_NOTE_NAME
+
 
 	def setup_gui(self):
 		status_icon = gtk.StatusIcon()
@@ -111,14 +139,20 @@ class MainInstance (object):
 	def on_notes_monitor_changed(self, monitor, gfile1, gfile2, event, model):
 		if event in (gio.FILE_MONITOR_EVENT_CREATED, gio.FILE_MONITOR_EVENT_DELETED):
 			self.reload_filemodel(model)
+		if event in (gio.FILE_MONITOR_EVENT_CHANGES_DONE_HINT, ):
+			self.file_names.pop(gfile1.get_path(), None)
+			self.reload_filemodel(model)
 
 	def new_note_on_screen(self, filepath, title=None, screen=None, timestamp=None):
 		progname = glib.get_application_name()
-		display_name_long = get_relative_name(filepath, get_notesdir())
-		self.new_vimdow(u"%s: %s" % (progname, display_name_long), filepath)
+		#display_name_long = get_relative_name(filepath, get_notesdir())
+		display_name_long = self.extract_note_title(filepath)
+		self.file_names[filepath] = display_name_long
+		title = u"%s: %s" % (progname, display_name_long)
+		self.new_vimdow(title, filepath)
 
 	def new_note(self, sender):
-		return self.new_note_on_screen(get_new_note_name(NEW_NOTE_NAME))
+		return self.new_note_on_screen(get_new_note_name())
 
 	def handle_commandline(self, progname, arguments):
 		for filename in arguments:
@@ -164,8 +198,14 @@ class MainInstance (object):
 			gtk.main_quit()
 
 
+def setup_locale():
+	try:
+		locale.setlocale(locale.LC_ALL, "")
+	except locale.Error:
+		pass
 
 def main(argv):
+	setup_locale()
 	glib.set_application_name(APPNAME)
 	glib.set_prgname(APPNAME)
 	m = MainInstance()
