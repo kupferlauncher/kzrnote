@@ -25,7 +25,10 @@ def get_notesdir():
 
 def get_notes():
 	D = get_notesdir()
-	return [os.path.join(D, x) for x in os.listdir(D)]
+	for x in os.listdir(D):
+		path = os.path.join(D, x)
+		if os.path.isfile(path):
+			yield path
 
 def get_note(notename):
 	return os.path.join(get_notesdir(), notename)
