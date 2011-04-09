@@ -155,6 +155,8 @@ class MainInstance (ExportedGObject):
 	__gsignals__ = {
 		"note-deleted": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
 			(gobject.TYPE_STRING, )),
+		"title-updated": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
+			(gobject.TYPE_STRING, gobject.TYPE_STRING )),
 	}
 	def __init__(self):
 		"""Create a new service on the Session Bus
@@ -179,6 +181,7 @@ class MainInstance (ExportedGObject):
 		self.window = None
 		self.status_icon = None
 		self.connect("note-deleted", self.on_note_deleted)
+		self.connect("title-updated", self.on_note_title_updated)
 
 	def unregister(self):
 		dbus.Bus().release_name(server_name)
@@ -247,6 +250,7 @@ class MainInstance (ExportedGObject):
 
 	def reload_file_note_title(self, filename):
 		self.file_names[filename] = self.extract_note_title(filename)
+		self.emit("title-updated", filename, self.file_names[filename])
 
 	def extract_note_title(self, filepath):
 		try:
@@ -341,6 +345,11 @@ class MainInstance (ExportedGObject):
 		if filepath in self.open_files:
 			self.open_files[filepath].destroy()
 
+	def on_note_title_updated(self, sender, filepath, new_title):
+		if filepath in self.open_files:
+			title = self.get_window_title_for_note_title(new_title)
+			self.open_files[filepath].set_title(title)
+
 	def on_notes_monitor_changed(self, monitor, gfile1, gfile2, event, model):
 		if event in (gio.FILE_MONITOR_EVENT_CREATED, gio.FILE_MONITOR_EVENT_DELETED):
 			self.reload_filemodel(model)
@@ -348,11 +357,15 @@ class MainInstance (ExportedGObject):
 			self.file_names.pop(gfile1.get_path(), None)
 			self.reload_filemodel(model)
 
-	def new_note_on_screen(self, filepath, title=None, screen=None, timestamp=None):
+	def get_window_title_for_note_title(self, note_title):
 		progname = glib.get_application_name()
-		display_name_long = self.extract_note_title(filepath)
+		title = u"%s: %s" % (progname, note_title)
+		return title
+
+	def new_note_on_screen(self, filepath, title=None, screen=None, timestamp=None):
+		display_name_long = self.ensure_note_title(filepath)
 		self.file_names[filepath] = display_name_long
-		title = u"%s: %s" % (progname, display_name_long)
+		title = self.get_window_title_for_note_title(display_name_long)
 		self.new_vimdow(title, filepath)
 
 	def new_note(self, sender):
