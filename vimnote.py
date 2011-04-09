@@ -6,6 +6,7 @@ ICONNAME = 'vim'
 import locale
 import os
 import sys
+import time
 import uuid
 
 import gtk
@@ -16,6 +17,7 @@ import glib
 NEW_NOTE_NAME = "New Note"
 MAXTITLELEN=50
 ATTICDIR="attic"
+DEFAULT_WIN_SIZE = (450, 450)
 
 def get_notesdir():
 	notesdir = os.path.join(glib.get_user_data_dir(), APPNAME)
@@ -69,6 +71,9 @@ class MainInstance (gobject.GObject):
 		gobject.GObject.__init__(self)
 		self.open_files = {}
 		self.file_names = {}
+		self.preload_ids = {}
+		self.window = None
+		self.status_icon = None
 		self.connect("note-deleted", self.on_note_deleted)
 
 	def reload_filemodel(self, model):
@@ -100,7 +105,6 @@ class MainInstance (gobject.GObject):
 		status_icon = gtk.StatusIcon()
 		status_icon.set_from_icon_name(ICONNAME)
 		status_icon.set_tooltip_text(APPNAME)
-		status_icon.connect("activate", gtk.main_quit)
 		status_icon.set_visible(True)
 		self.status_icon = status_icon
 
@@ -135,11 +139,14 @@ class MainInstance (gobject.GObject):
 		vbox.show()
 		self.window.add(vbox)
 		self.window.present()
+		self.window.connect("delete-event", self.window.hide_on_delete)
+		status_icon.connect("activate", lambda x: self.window.present())
 
 		gfile = gio.File(path=get_notesdir())
 		self.monitor = gfile.monitor_directory()
 		if self.monitor:
 			self.monitor.connect("changed", self.on_notes_monitor_changed, self.list_store)
+		self.preload()
 
 	def on_list_view_row_activate(self, treeview, path, view_column):
 		store = treeview.get_model()
@@ -197,7 +204,55 @@ class MainInstance (gobject.GObject):
 				display_name_long = display_name_long.replace(homedir, "~", 1)
 			self.new_vimdow(u"%s: %s" % (progname, display_name_long), gfile.get_path())
 
+	@classmethod
+	def generate_preload_id(cls):
+		return "__%s_%s_" % (APPNAME, time.time())
+
+	def preload(self):
+		"""
+		Open a new hidden Vim window
+		"""
+		window = gtk.Window()
+		window.set_default_size(*DEFAULT_WIN_SIZE)
+
+		socket = gtk.Socket()
+		window.realize()
+		window.add(socket)
+		socket.show()
+		print socket, socket.get_id()
+
+		preload_id = self.generate_preload_id()
+
+		pid, sin, sout, serr = \
+				glib.spawn_async([VIM, '-g', '-f', '--socketid', '%s' % socket.get_id(),
+				                  '--servername', preload_id],
+						 flags=glib.SPAWN_SEARCH_PATH|glib.SPAWN_DO_NOT_REAP_CHILD)
+		glib.child_watch_add(pid, self.on_vim_exit, window)
+		self.preload_ids[preload_id] = window
+
+	def new_vimdow_preloaded(self, name, filepath):
+		if not self.preload_ids:
+			raise RuntimeError("No Preloaded instances found!")
+		preload_id, window = self.preload_ids.popitem()
+		window.set_title(name)
+		self.open_files[filepath] = window
+
+		## Send it this way so that no message is shown when loading
+		## Note: Filename requires escaping (but our defaults are safe ones)
+		preload_argv = [VIM, '-g', '-f', '--servername', preload_id,
+		                '--remote-send', '<ESC>:bd<CR>:e %s<CR><CR>' % filepath]
+		print preload_argv
+
+		pid, sin, sout, serr = \
+				glib.spawn_async(preload_argv, flags=glib.SPAWN_SEARCH_PATH)
+		window.present()
+
+
 	def new_vimdow(self, name, filepath):
+		if self.preload_ids:
+			self.new_vimdow_preloaded(name, filepath)
+			glib.idle_add(self.preload)
+			return
 		window = gtk.Window()
 		window.set_title(name)
 		window.set_default_size(400, 400)
