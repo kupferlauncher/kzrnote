@@ -4,6 +4,7 @@ APPNAME = "vimnote"
 VIM = 'vim'
 ICONNAME = 'vim'
 
+import errno
 import locale
 import os
 import sys
@@ -36,13 +37,15 @@ VIMSWPARGS=['-c', 'set undodir=%s directory=%s backupdir=%s']
 
 #:set guioptions=-T
 #:set shortmess+=T
-def get_notesdir():
-	notesdir = os.path.join(glib.get_user_data_dir(), APPNAME)
+def ensure_notesdir():
 	try:
-		os.makedirs(notesdir)
-	except OSError:
-		pass
-	return notesdir
+		os.makedirs(get_notesdir())
+	except OSError as exc:
+		if not exc.errno == errno.EEXIST:
+			raise
+
+def get_notesdir():
+	return os.path.join(glib.get_user_data_dir(), APPNAME)
 
 def get_cache_dir():
 	cachedir = os.path.join(glib.get_user_cache_dir(), APPNAME)
@@ -58,6 +61,9 @@ def get_cache_dir():
 URL_SCHEME = "note"
 URL_NETLOC = "vimnote"
 
+def toasciiuri(uuri):
+	return uuri.encode("utf-8") if isinstance(uuri, unicode) else uuri
+
 def get_note_uri(filepath):
 	return "%s://%s/%s" % (URL_SCHEME, URL_NETLOC, os.path.basename(filepath))
 
@@ -67,7 +73,7 @@ def get_filename_for_note_uri(uri):
 
 	does not check if it exists
 	"""
-	parse = urlparse.urlparse(uri)
+	parse = urlparse.urlparse(toasciiuri(uri))
 	if parse.scheme != URL_SCHEME or parse.netloc != URL_NETLOC:
 		raise ValueError("Not a %s://%s/.. URI" % (URL_SCHEME, URL_NETLOC))
 	if len(parse.path) < 2:
@@ -83,6 +89,9 @@ def get_note_paths():
 
 def get_note(notename):
 	return os.path.join(get_notesdir(), notename)
+
+def is_note(filename):
+	return filename.startswith(get_notesdir()) and os.path.exists(filename)
 
 def get_new_note_name():
 	for retry in xrange(1000):
@@ -148,7 +157,15 @@ class MainInstance (ExportedGObject):
 
 	@dbus.service.method(interface_name, in_signature="s", out_signature="b")
 	def DisplayNote(self, uri):
-		pass
+		try:
+			filename = get_filename_for_note_uri(uri)
+		except ValueError:
+			return False
+		if is_note(filename):
+			self.display_note_by_file(filename)
+			return True
+		else:
+			return False
 
 	@dbus.service.method(interface_name, in_signature="", out_signature="as")
 	def ListAllNotes(self):
@@ -245,10 +262,13 @@ class MainInstance (ExportedGObject):
 		store = treeview.get_model()
 		titer = store.get_iter(path)
 		(filepath, ) = store.get(titer, 0)
-		if filepath in self.open_files:
-			self.open_files[filepath].present()
+		self.display_note_by_file(filepath)
+
+	def display_note_by_file(self, filename):
+		if filename in self.open_files:
+			self.open_files[filename].present()
 		else:
-			self.new_note_on_screen(filepath)
+			self.new_note_on_screen(filename)
 
 	def on_delete_row_cliecked(self, toolitem, treeview):
 		path, column = treeview.get_cursor()
@@ -417,6 +437,7 @@ def main(argv):
 	m = MainInstance()
 	glib.idle_add(m.setup_gui)
 	glib.idle_add(m.handle_commandline, argv[0], argv[1:])
+	ensure_notesdir()
 	return gtk.main()
 
 
