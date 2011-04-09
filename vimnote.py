@@ -27,7 +27,7 @@ VIM_START_SCRIPT= """
 ## Needs directory parameters
 ## set wm=2  wrapmargin för automatisk wrapping till fönsterstorlek
 ## Autosave all the time:  au CursorHold <buffer> w
-VIM_EXTRA_FLAGS=['-c', 'set guioptions-=m guioptions-=T shortmess+=a', '-c', 'set wm=2', '-c', 'au CursorHold * w']
+VIM_EXTRA_FLAGS=['-c', 'set guioptions-=m guioptions-=T shortmess+=a', '-c', 'set wm=2', '-c', 'au CursorHold ?* silent! w']
 VIMSWPARGS=['-c', 'set undodir=%s directory=%s backupdir=%s']
 
 #:set guioptions=-T
