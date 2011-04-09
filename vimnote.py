@@ -133,7 +133,9 @@ def touch_filename(filename, lcontent=None):
 	"""
 	fd = os.open(filename, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0666)
 	if lcontent:
-		os.write(fd, lcontent)
+		written = 0
+		while written < len(lcontent):
+			written += os.write(fd, lcontent[written:])
 	os.close(fd)
 
 def overwrite_filename(filename, lcontent):
@@ -143,9 +145,25 @@ def overwrite_filename(filename, lcontent):
 	write the bytestring @lcontent into it
 	"""
 	fd = os.open(filename, os.O_CREAT| os.O_TRUNC | os.O_WRONLY, 0666)
-	os.write(fd, lcontent)
+	written = 0
+	while written < len(lcontent):
+		written += os.write(fd, lcontent[written:])
 	os.close(fd)
 
+def read_filename(filename):
+	"""
+	Read @filename which must exists
+
+	return a byte string
+	"""
+	read = []
+	with open(filename, "rb") as fobj:
+		while 1:
+			r = fobj.read()
+			if not r:
+				break
+			read.append(r)
+	return "".join(read)
 
 def get_relative_name(path, relativeto):
 	display_name_long = glib.filename_display_name(path)
@@ -247,6 +265,20 @@ class MainInstance (ExportedGObject):
 		except ValueError:
 			return ""
 		return self.ensure_note_title(filename)
+
+	@dbus.service.method(interface_name, in_signature="s", out_signature="s")
+	def GetNoteContents(self, uri):
+		try:
+			filename = get_filename_for_note_uri(uri)
+		except ValueError:
+			return ""
+		if is_note(filename):
+			try:
+				return fromnoteencoding(read_filename(filename))
+			except UnicodeDecodeError:
+				return ""
+		else:
+			return ""
 
 	@dbus.service.method(interface_name, in_signature="ss", out_signature="b")
 	def SetNoteContents(self, uri, contents):
