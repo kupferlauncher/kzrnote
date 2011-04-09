@@ -93,15 +93,18 @@ FILENAME_LEN = 36 + len(NOTE_SUFFIX)
 class InvalidNoteURI:
 	pass
 
-def tonoteencoding(ustr, errors=True):
-	"""
-	Return a byte string in the note encoding from @ustr
-	"""
+def tolocaleencoding(ustr, errors=True):
 	enc = locale.getpreferredencoding(do_setlocale=False)
 	if errors:
 		return ustr.encode(enc)
 	else:
 		return ustr.encode(enc, 'replace')
+
+def tonoteencoding(ustr, errors=True):
+	"""
+	Return a byte string in the note encoding from @ustr
+	"""
+	return tolocaleencoding(ustr, errors)
 
 def fromnoteencoding(lstr, errors=True):
 	"""
@@ -378,6 +381,29 @@ class MainInstance (ExportedGObject):
 	def SetNoteContentsXml(self, uri, contents):
 		## Easy choice: SetNoteContentsXml broken on Gnote. We can support SetNoteCompleteXml
 		raise NotImplementedError
+
+	@dbus.service.method(interface_name, in_signature="sb", out_signature="as")
+	def SearchNotes(self, query, case_sensistive):
+		## NOTE: For "compatibility", we are always case sensistive
+		results = []
+		grep_cmd = ['/bin/grep', '-l', '-i']
+		grep_cmd.extend(['-e', tolocaleencoding(query, errors=False)])
+		grep_cmd.extend(['-r', get_notesdir()])
+		grep_cmd.append('--include=*%s' % NOTE_SUFFIX)
+		grep_cmd.extend(['--exclude-dir=%s' % SWPDIR, '--exclude-dir=%s' % ATTICDIR])
+		log(grep_cmd)
+		cin, cout = os.popen2(grep_cmd)
+		cin.close()
+		try:
+			for line in cout:
+				log(line)
+				line = line.strip()
+				if is_note(line):
+					results.append(get_note_uri(line))
+		finally:
+			cout.close()
+		return results
+
 
 	@dbus.service.method(interface_name, in_signature="s", out_signature="as")
 	def GetTagsForNote(self, tagname):
