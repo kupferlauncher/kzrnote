@@ -20,20 +20,28 @@ import gio
 import gobject
 import glib
 
+
+
 NEW_NOTE_NAME = "New Note"
 MAXTITLELEN=50
 ATTICDIR="attic"
 SWPDIR="vimcache"
 DEFAULT_WIN_SIZE = (450, 450)
 
-VIM_START_SCRIPT= """
-:set shortmess+=t
-"""
+def log(*args):
+	sys.stderr.write("%s: " % __name__)
+	sys.stderr.write(str(time.time()) + " ")
+	for arg in args:
+		sys.stderr.write(unicode(arg).encode("ascii", "replace"))
+		sys.stderr.write(" ")
+	sys.stderr.write("\n")
+
 ## Needs directory parameters
 ## set wm=2  wrapmargin för automatisk wrapping till fönsterstorlek
 ## Autosave all the time:  au CursorHold <buffer> w
 VIM_EXTRA_FLAGS=['-c', 'set guioptions-=m guioptions-=T shortmess+=a', '-c', 'set wm=2', '-c', 'au CursorHold ?* silent! w']
 VIMSWPARGS=['-c', 'set undodir=%s directory=%s backupdir=%s']
+
 
 #:set guioptions=-T
 #:set shortmess+=T
@@ -230,6 +238,18 @@ class MainInstance (ExportedGObject):
 		assert not is_note(new_note)
 		touch_filename(new_note, tonoteencoding(title))
 		return get_note_uri(new_note)
+
+	@dbus.service.method(interface_name, in_signature="s", out_signature="b")
+	def DeleteNote(self, uri):
+		try:
+			filename = get_filename_for_note_uri(uri)
+		except ValueError:
+			return False
+		if is_note(filename):
+			self.delete_note(filename)
+			return True
+		else:
+			return False
 
 	@dbus.service.method(interface_name, in_signature="s", out_signature="b")
 	def DisplayNote(self, uri):
@@ -430,7 +450,10 @@ class MainInstance (ExportedGObject):
 		store = treeview.get_model()
 		titer = store.get_iter(path)
 		(filepath, ) = store.get(titer, 0)
-		print "Moving ", filepath
+		self.delete_note(filepath)
+
+	def delete_note(self, filepath):
+		log("Moving ", filepath)
 		notes_dir = get_notesdir()
 		attic_dir = os.path.join(notes_dir, ATTICDIR)
 		try:
@@ -516,11 +539,11 @@ class MainInstance (ExportedGObject):
 		swpargs[-1] = swpargs[-1] % (vimswpdir, vimswpdir, vimswpdir)
 
 		argv = [VIM, '-g', '-f', '--socketid', '%s' % socket.get_id()]
-		argv.extend(extra_args)
 		argv.extend(VIM_EXTRA_FLAGS)
 		argv.extend(swpargs)
+		argv.extend(extra_args)
 
-		print "Spawning", argv
+		log("Spawning", argv)
 		pid, sin, sout, serr = \
 				glib.spawn_async(argv,
 						 flags=glib.SPAWN_SEARCH_PATH|glib.SPAWN_DO_NOT_REAP_CHILD)
@@ -532,46 +555,40 @@ class MainInstance (ExportedGObject):
 			raise RuntimeError("No Preloaded instances found!")
 		preload_id, window = self.preload_ids.popitem()
 		window.set_title(name)
-		window.set_default_size(*DEFAULT_WIN_SIZE)
 		self.open_files[filepath] = window
 
 		## Send it this way so that no message is shown when loading
 		## Note: Filename requires escaping (but our defaults are safe ones)
 		preload_argv = [VIM, '-g', '-f', '--servername', preload_id,
 		                '--remote-send', '<ESC>:e %s<CR><CR>' % filepath]
-		print "Using preloaded", preload_argv
 
+		log("Using preloaded", preload_argv)
+		## watch this process
 		pid, sin, sout, serr = \
-				glib.spawn_async(preload_argv, flags=glib.SPAWN_SEARCH_PATH)
+				glib.spawn_async(preload_argv,
+				                 flags=glib.SPAWN_SEARCH_PATH|glib.SPAWN_DO_NOT_REAP_CHILD)
+		glib.child_watch_add(pid, self.on_vim_remote_exit, preload_argv)
 		window.present()
 
-
+	def on_vim_remote_exit(self, pid, condition, preload_argv):
+		exit_status = os.WEXITSTATUS(condition)
+		log(" vim --remote exited with status", exit_status)
+		if exit_status != 0:
+			pass
+			#glib.timeout_add(800, self._respawn_again, preload_argv)
+	
 	def new_vimdow(self, name, filepath):
 		if self.preload_ids:
 			self.new_vimdow_preloaded(name, filepath)
 			glib.timeout_add_seconds(5, self.preload)
 			return
-		window = gtk.Window()
+		window = self.start_vim_hidden([filepath])
 		window.set_title(name)
-		window.set_default_size(400, 400)
-
-		socket = gtk.Socket()
-		window.realize()
-		window.add(socket)
-		socket.show()
 		window.show()
-		socket.grab_focus()
-		print socket, socket.get_id()
-
 		self.open_files[filepath] = window
 
-		pid, sin, sout, serr = \
-				glib.spawn_async([VIM, '-g', '-f', '--socketid', '%s' % socket.get_id(), filepath],
-						 flags=glib.SPAWN_SEARCH_PATH|glib.SPAWN_DO_NOT_REAP_CHILD)
-		glib.child_watch_add(pid, self.on_vim_exit, window)
-
 	def on_vim_exit(self, pid, condition, window):
-		print "Vim Pid: %d  exited  (%x)" % (pid, condition)
+		log( "Vim Pid: %d  exited  (%x)" % (pid, condition))
 		for k,v in self.open_files.items():
 			if v == window:
 				del self.open_files[k]
@@ -579,10 +596,6 @@ class MainInstance (ExportedGObject):
 		else:
 			raise RuntimeError("Unknown window closed %d %d" % (pid, condition))
 		window.destroy()
-		print gtk.window_list_toplevels()
-		if not gtk.window_list_toplevels():
-			print "No windows left, exiting.."
-			gtk.main_quit()
 
 
 def setup_locale():
