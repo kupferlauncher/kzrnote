@@ -28,13 +28,21 @@ ATTICDIR="attic"
 SWPDIR="vimcache"
 DEFAULT_WIN_SIZE = (450, 450)
 
-def log(*args):
-	sys.stderr.write("%s: " % __name__)
-	sys.stderr.write(str(time.time()) + " ")
+def plainlog(*args):
 	for arg in args:
 		sys.stderr.write(unicode(arg).encode("ascii", "replace"))
 		sys.stderr.write(" ")
 	sys.stderr.write("\n")
+
+def log(*args):
+	sys.stderr.write("%s: " % __name__)
+	sys.stderr.write(str(time.time()) + " ")
+	plainlog(*args)
+
+def error(*args):
+	sys.stderr.write("Error in %s: " % __name__)
+	plainlog(*args)
+
 
 ## Needs directory parameters
 ## set wm=2  wrapmargin för automatisk wrapping till fönsterstorlek
@@ -97,6 +105,17 @@ def tolocaleencoding(ustr, errors=True):
 	else:
 		return ustr.encode(enc, 'replace')
 
+def fromlocaleencoding(lstr, errors=True):
+	"""
+	Return a unicode string from the locale-encoded @lstr
+	"""
+	enc = locale.getpreferredencoding(do_setlocale=False)
+	if errors:
+		return lstr.decode(enc)
+	else:
+		return lstr.decode(enc, 'replace')
+
+
 def tonoteencoding(ustr, errors=True):
 	"""
 	Return a byte string in the note encoding from @ustr
@@ -107,11 +126,7 @@ def fromnoteencoding(lstr, errors=True):
 	"""
 	Return a unicode string from the note-encoded @lstr
 	"""
-	enc = locale.getpreferredencoding(do_setlocale=False)
-	if errors:
-		return lstr.decode(enc)
-	else:
-		return lstr.decode(enc, 'replace')
+	return fromlocaleencoding(lstr, errors)
 
 def toasciiuri(uuri):
 	return uuri.encode("utf-8") if isinstance(uuri, unicode) else uuri
@@ -247,14 +262,16 @@ class MainInstance (ExportedGObject):
 	}
 	def __init__(self):
 		"""Create a new service on the Session Bus
+
+		Raises RuntimeError on no dbus-connection
+		Raises NameError if the service already exists
 		"""
 		try:
 			session_bus = dbus.Bus()
 		except dbus.DBusException:
 			raise RuntimeError("No D-Bus connection")
 		if session_bus.name_has_owner(server_name):
-			log("An instance already running, exiting...")
-			raise SystemExit(1)
+			raise NameError
 
 		bus_name = dbus.service.BusName(server_name, bus=session_bus)
 		super(MainInstance, self).__init__(conn=session_bus,
@@ -433,6 +450,11 @@ class MainInstance (ExportedGObject):
 		## FIXME
 		return []
 
+	## Vimnote-specific D-Bus methods
+	@dbus.service.method(interface_name, in_signature="asss", out_signature="s")
+	def VimnoteCommandline(self, uargv, display, desktop_startup_id):
+		return self.handle_commandline(uargv)
+
 	def reload_filemodel(self, model):
 		notes_dir = get_notesdir()
 		model.clear()
@@ -599,14 +621,21 @@ class MainInstance (ExportedGObject):
 	def new_note(self, sender):
 		return self.new_note_on_screen(get_new_note_name())
 
-	def handle_commandline(self, progname, arguments):
-		for filename in arguments:
-			gfile = gio.File(filename)
-			display_name_long = glib.filename_display_name(gfile.get_path())
-			homedir = glib.filename_display_name(os.path.expanduser("~"))
-			if display_name_long.startswith(homedir):
-				display_name_long = display_name_long.replace(homedir, "~", 1)
-			self.new_vimdow(u"%s: %s" % (progname, display_name_long), gfile.get_path())
+	def handle_commandline(self, arguments):
+		"""
+		When handling commandline:
+
+		Open The Note URIS on the commandline,
+		if nothing else is there, present the main window.
+
+		returns: String output (Usage help if applicable)
+		"""
+		log("ahndle commandline", arguments)
+		if not arguments:
+			self.window.present()
+		for noteuri in arguments:
+			self.DisplayNote(noteuri)
+		return ""
 
 	@classmethod
 	def generate_preload_id(cls):
@@ -709,6 +738,15 @@ class MainInstance (ExportedGObject):
 			raise RuntimeError("Unknown window closed %d %d" % (pid, condition))
 		window.destroy()
 
+def service_send_commandline(uargv):
+	bus = dbus.Bus()
+	proxy_obj = bus.get_object(server_name, object_name)
+	iface = dbus.Interface(proxy_obj, interface_name)
+	try:
+		iface.VimnoteCommandline(uargv,"", "")
+	except dbus.DBusException as exc:
+		error(exc)
+	#iface.VimnoteCommandline(uargv,"", "", error_handler=_dummy, reply_handler=_dummy)
 
 def setup_locale():
 	try:
@@ -721,9 +759,19 @@ def main(argv):
 	DBusGMainLoop(set_as_default=True)
 	glib.set_application_name(APPNAME)
 	glib.set_prgname(APPNAME)
-	m = MainInstance()
+	uargv = [fromlocaleencoding(arg, errors=False) for arg in argv[1:]]
+	try:
+		m = MainInstance()
+	except RuntimeError as exc:
+		log(exc)
+		return 1
+	except NameError as exc:
+		log(exc)
+		log("An instance already running, passing on commandline...")
+		service_send_commandline(uargv)
+		return 0
 	glib.idle_add(m.setup_gui)
-	glib.idle_add(m.handle_commandline, argv[0], argv[1:])
+	glib.idle_add(m.handle_commandline, uargv)
 	ensure_notesdir()
 	try:
 		gtk.main()
