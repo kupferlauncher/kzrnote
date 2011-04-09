@@ -50,6 +50,14 @@ class MainInstance (object):
 	def __init__(self):
 		self.open_files = {}
 
+	def reload_filemodel(self, model):
+		print "Reloading files"
+		notes_dir = get_notesdir()
+		model.clear()
+		for filename in get_notes():
+			print filename
+			model.append((filename, get_relative_name(filename, notes_dir)))
+
 	def setup_gui(self):
 		status_icon = gtk.StatusIcon()
 		status_icon.set_from_icon_name(ICONNAME)
@@ -64,12 +72,9 @@ class MainInstance (object):
 		self.list_store = gtk.ListStore(gobject.TYPE_STRING, gobject.TYPE_STRING)
 		self.list_view.set_model(self.list_store)
 		cell = gtk.CellRendererText()
-		notes_dir = get_notesdir()
 		filename_col = gtk.TreeViewColumn("Note", cell, text=1)
 		self.list_view.append_column(filename_col)
-		for filename in get_notes():
-			print filename
-			self.list_store.append((filename, get_relative_name(filename, notes_dir)))
+		self.reload_filemodel(self.list_store)
 		self.list_view.show()
 		self.list_view.connect("row-activated", self.on_list_view_row_activate)
 		toolbar = gtk.Toolbar()
@@ -89,16 +94,23 @@ class MainInstance (object):
 		self.window.add(vbox)
 		self.window.present()
 
+		gfile = gio.File(path=get_notesdir())
+		self.monitor = gfile.monitor_directory()
+		if self.monitor:
+			self.monitor.connect("changed", self.on_notes_monitor_changed, self.list_store)
+
 	def on_list_view_row_activate(self, treeview, path, view_column):
 		store = treeview.get_model()
 		titer = store.get_iter(path)
 		(filepath, ) = store.get(titer, 0)
-		print filepath
 		if filepath in self.open_files:
 			self.open_files[filepath].present()
 		else:
 			self.new_note_on_screen(filepath)
 
+	def on_notes_monitor_changed(self, monitor, gfile1, gfile2, event, model):
+		if event in (gio.FILE_MONITOR_EVENT_CREATED, gio.FILE_MONITOR_EVENT_DELETED):
+			self.reload_filemodel(model)
 
 	def new_note_on_screen(self, filepath, title=None, screen=None, timestamp=None):
 		progname = glib.get_application_name()
