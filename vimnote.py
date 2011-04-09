@@ -14,6 +14,8 @@ import gobject
 import glib
 
 NEW_NOTE_NAME = "New Note"
+MAXTITLELEN=50
+ATTICDIR="attic"
 
 def get_notesdir():
 	notesdir = os.path.join(glib.get_user_data_dir(), APPNAME)
@@ -35,7 +37,6 @@ def get_note(notename):
 
 def get_new_note_name():
 	for retry in xrange(1000):
-		#name = base if not retry else "%s %d" % (base, retry)
 		name = str(uuid.uuid4())
 		if not os.path.exists(get_note(name)):
 			return get_note(name)
@@ -59,10 +60,16 @@ def get_relative_name(path, relativeto):
 		return display_name_long.replace(homedir, "~", 1)
 	return display_name_long
 
-class MainInstance (object):
+class MainInstance (gobject.GObject):
+	__gsignals__ = {
+		"note-deleted": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
+			(gobject.TYPE_STRING, )),
+	}
 	def __init__(self):
+		gobject.GObject.__init__(self)
 		self.open_files = {}
 		self.file_names = {}
+		self.connect("note-deleted", self.on_note_deleted)
 
 	def reload_filemodel(self, model):
 		notes_dir = get_notesdir()
@@ -82,7 +89,7 @@ class MainInstance (object):
 				for firstline in f:
 					ufirstline = fromlocale_flatten(firstline).strip()
 					if ufirstline:
-						return ufirstline
+						return ufirstline[:MAXTITLELEN]
 					break
 		except EnvironmentError:
 			pass
@@ -109,14 +116,18 @@ class MainInstance (object):
 		self.list_view.show()
 		self.list_view.connect("row-activated", self.on_list_view_row_activate)
 		toolbar = gtk.Toolbar()
-		new = gtk.ToolButton("gtk-new")
+		new = gtk.ToolButton(gtk.STOCK_NEW)
 		new.connect("clicked", self.new_note)
-		quit = gtk.ToolButton("gtk-quit")
+		delete = gtk.ToolButton(gtk.STOCK_DELETE)
+		delete.connect("clicked", self.on_delete_row_cliecked, self.list_view)
+		quit = gtk.ToolButton(gtk.STOCK_QUIT)
 		quit.connect("clicked", gtk.main_quit)
+		delete.show()
 		new.show()
 		quit.show()
 		toolbar.insert(new, 0)
-		toolbar.insert(quit, 1)
+		toolbar.insert(delete, 1)
+		toolbar.insert(quit, 2)
 		toolbar.show()
 		vbox = gtk.VBox()
 		vbox.pack_start(toolbar, False, True, 0)
@@ -139,6 +150,27 @@ class MainInstance (object):
 		else:
 			self.new_note_on_screen(filepath)
 
+	def on_delete_row_cliecked(self, toolitem, treeview):
+		path, column = treeview.get_cursor()
+		if path is None:
+			return
+		store = treeview.get_model()
+		titer = store.get_iter(path)
+		(filepath, ) = store.get(titer, 0)
+		print "Moving ", filepath
+		notes_dir = get_notesdir()
+		attic_dir = os.path.join(notes_dir, ATTICDIR)
+		try:
+			os.makedirs(attic_dir)
+		except OSError:
+			pass
+		os.rename(filepath, os.path.join(attic_dir, os.path.basename(filepath)))
+		self.emit("note-deleted", filepath)
+
+	def on_note_deleted(self, sender, filepath):
+		if filepath in self.open_files:
+			self.open_files[filepath].destroy()
+
 	def on_notes_monitor_changed(self, monitor, gfile1, gfile2, event, model):
 		if event in (gio.FILE_MONITOR_EVENT_CREATED, gio.FILE_MONITOR_EVENT_DELETED):
 			self.reload_filemodel(model)
@@ -148,7 +180,6 @@ class MainInstance (object):
 
 	def new_note_on_screen(self, filepath, title=None, screen=None, timestamp=None):
 		progname = glib.get_application_name()
-		#display_name_long = get_relative_name(filepath, get_notesdir())
 		display_name_long = self.extract_note_title(filepath)
 		self.file_names[filepath] = display_name_long
 		title = u"%s: %s" % (progname, display_name_long)
