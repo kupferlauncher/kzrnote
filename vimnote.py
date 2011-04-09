@@ -1,3 +1,4 @@
+# encoding: utf-8
 
 APPNAME = "vimnote"
 VIM = 'vim'
@@ -17,8 +18,20 @@ import glib
 NEW_NOTE_NAME = "New Note"
 MAXTITLELEN=50
 ATTICDIR="attic"
+SWPDIR="vimcache"
 DEFAULT_WIN_SIZE = (450, 450)
 
+VIM_START_SCRIPT= """
+:set shortmess+=t
+"""
+## Needs directory parameters
+## set wm=2  wrapmargin för automatisk wrapping till fönsterstorlek
+## Autosave all the time:  au CursorHold <buffer> w
+VIM_EXTRA_FLAGS=['-c', 'set guioptions-=m guioptions-=T shortmess+=a', '-c', 'set wm=2', '-c', 'au CursorHold * w']
+VIMSWPARGS=['-c', 'set undodir=%s directory=%s backupdir=%s']
+
+#:set guioptions=-T
+#:set shortmess+=T
 def get_notesdir():
 	notesdir = os.path.join(glib.get_user_data_dir(), APPNAME)
 	try:
@@ -26,6 +39,14 @@ def get_notesdir():
 	except OSError:
 		pass
 	return notesdir
+
+def get_cache_dir():
+	cachedir = os.path.join(glib.get_user_cache_dir(), APPNAME)
+	try:
+		os.makedirs(cachedir)
+	except OSError:
+		pass
+	return cachedir
 
 def get_notes():
 	D = get_notesdir()
@@ -212,6 +233,17 @@ class MainInstance (gobject.GObject):
 		"""
 		Open a new hidden Vim window
 		"""
+		preload_id = self.generate_preload_id()
+		extra_args = ['--servername', preload_id]
+		## put the returned window in the preload table
+		self.preload_ids[preload_id] = self.start_vim_hidden(extra_args)
+
+	def start_vim_hidden(self, extra_args=[]):
+		"""
+		Open a new hidden Vim window
+
+		Return (window, preload_id)
+		"""
 		window = gtk.Window()
 		window.set_default_size(*DEFAULT_WIN_SIZE)
 
@@ -219,29 +251,41 @@ class MainInstance (gobject.GObject):
 		window.realize()
 		window.add(socket)
 		socket.show()
-		print socket, socket.get_id()
 
-		preload_id = self.generate_preload_id()
+		vimswpdir = os.path.join(get_notesdir(), SWPDIR)
+		try:
+			os.makedirs(vimswpdir, 0o700)
+		except EnvironmentError:
+			pass
 
+		swpargs = list(VIMSWPARGS)
+		swpargs[-1] = swpargs[-1] % (vimswpdir, vimswpdir, vimswpdir)
+
+		argv = [VIM, '-g', '-f', '--socketid', '%s' % socket.get_id()]
+		argv.extend(extra_args)
+		argv.extend(VIM_EXTRA_FLAGS)
+		argv.extend(swpargs)
+
+		print "Spawning", argv
 		pid, sin, sout, serr = \
-				glib.spawn_async([VIM, '-g', '-f', '--socketid', '%s' % socket.get_id(),
-				                  '--servername', preload_id],
+				glib.spawn_async(argv,
 						 flags=glib.SPAWN_SEARCH_PATH|glib.SPAWN_DO_NOT_REAP_CHILD)
 		glib.child_watch_add(pid, self.on_vim_exit, window)
-		self.preload_ids[preload_id] = window
+		return window
 
 	def new_vimdow_preloaded(self, name, filepath):
 		if not self.preload_ids:
 			raise RuntimeError("No Preloaded instances found!")
 		preload_id, window = self.preload_ids.popitem()
 		window.set_title(name)
+		window.set_default_size(*DEFAULT_WIN_SIZE)
 		self.open_files[filepath] = window
 
 		## Send it this way so that no message is shown when loading
 		## Note: Filename requires escaping (but our defaults are safe ones)
 		preload_argv = [VIM, '-g', '-f', '--servername', preload_id,
-		                '--remote-send', '<ESC>:bd<CR>:e %s<CR><CR>' % filepath]
-		print preload_argv
+		                '--remote-send', '<ESC>:e %s<CR><CR>' % filepath]
+		print "Using preloaded", preload_argv
 
 		pid, sin, sout, serr = \
 				glib.spawn_async(preload_argv, flags=glib.SPAWN_SEARCH_PATH)
@@ -251,7 +295,7 @@ class MainInstance (gobject.GObject):
 	def new_vimdow(self, name, filepath):
 		if self.preload_ids:
 			self.new_vimdow_preloaded(name, filepath)
-			glib.idle_add(self.preload)
+			glib.timeout_add_seconds(5, self.preload)
 			return
 		window = gtk.Window()
 		window.set_title(name)
