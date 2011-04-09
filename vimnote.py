@@ -10,16 +10,21 @@ import os
 import sys
 import time
 import urlparse
-import uuid
 
 import dbus
 from dbus.gobject_service import ExportedGObject
 from dbus.mainloop.glib import DBusGMainLoop
-import gtk
-import gio
 import gobject
 import glib
 
+## "Lazy imports"
+uuid = None
+gtk = None
+gio = None
+
+def lazy_import(name):
+	if globals()[name] is None:
+		globals()[name] = __import__(name)
 
 
 NEW_NOTE_NAME = "New Note"
@@ -770,6 +775,9 @@ def main(argv):
 		log("An instance already running, passing on commandline...")
 		service_send_commandline(uargv)
 		return 0
+	lazy_import("uuid")
+	lazy_import("gtk")
+	lazy_import("gio")
 	glib.idle_add(m.setup_gui)
 	glib.idle_add(m.handle_commandline, uargv)
 	ensure_notesdir()
