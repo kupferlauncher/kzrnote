@@ -309,6 +309,26 @@ class MainInstance (ExportedGObject):
 		else:
 			return False
 
+	@dbus.service.method(interface_name, in_signature="ss", out_signature="b")
+	def SetNoteContentsXml(self, uri, contents):
+		## Easy choice: SetNoteContentsXml broken on Gnote. We can support SetNoteCompleteXml
+		raise NotImplementedError
+
+	@dbus.service.method(interface_name, in_signature="s", out_signature="as")
+	def GetTagsForNote(self, tagname):
+		## FIXME
+		return []
+
+	@dbus.service.method(interface_name, in_signature="ss", out_signature="b")
+	def AddTagToNote(self, uri, tagname):
+		## FIXME
+		raise NotImplementedError
+
+	@dbus.service.method(interface_name, in_signature="ss", out_signature="b")
+	def RemoveTagFromNote(self, uri, tagname):
+		## FIXME
+		raise NotImplementedError
+
 	@dbus.service.method(interface_name, in_signature="s", out_signature="as")
 	def GetAllNotesWithTag(self, tagname):
 		## FIXME
