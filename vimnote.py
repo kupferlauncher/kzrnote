@@ -64,9 +64,11 @@ set shortmess+=a
 " use wrapmargin to adjust to window size
 set wm=1
 
-" autosave
+" autosave quickly, and always write on exit
 au InsertLeave,CursorHold,CursorHoldI ?* silent! w
-set updatetime=1000
+set updatetime=4000
+set autoread
+set autowriteall
 
 set undodir=CACHE/cache
 set directory=CACHE/cache
