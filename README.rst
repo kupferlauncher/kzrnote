@@ -16,9 +16,16 @@ Invoke it using::
 
     python vimnote.py
 
-Envisioned features are the basics of Gnote: Spatial windows (remembering
-size and position), and then we want some vim customization too and better
-Kupfer integration.
+It remembers the size and position of each individual note window. Vim
+itself gives us a couple of incredible features, including persistent undo
+across restarts.
+
+It's not yet decided if vimnote should try to communicate via a fake XML
+note format in the D-Bus api. Our file format on disk is locale-encoded
+plain text.
+
+The user can put vimnote-specific vim settings in the file
+``~/.config/vimnote/user.vim``.
 
 Install it using::
 
