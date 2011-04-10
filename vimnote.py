@@ -705,6 +705,8 @@ class MainInstance (ExportedGObject):
 		glib.timeout_add_seconds(1, self.nudge_window, window)
 
 	def nudge_window(self, window):
+		## disabled for now
+		return
 		## Nudge window so that the child's size is reallocated
 		sz = tuple(window.get_size())
 		log("nudge", window.get_title(), sz)
