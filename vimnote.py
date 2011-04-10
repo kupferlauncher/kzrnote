@@ -669,6 +669,15 @@ class MainInstance (ExportedGObject):
 		window.connect("configure-event",
 		               self.metadata_service.update_window_geometry,
 		               filepath)
+		glib.timeout_add_seconds(1, self.nudge_window, window)
+
+	def nudge_window(self, window):
+		## Nudge window so that the child's size is reallocated
+		sz = tuple(window.get_size())
+		log("nudge", window.get_title(), sz)
+		bw = window.get_border_width()
+		window.set_border_width(bw+1)
+		glib.timeout_add(100,window.set_border_width, bw)
 
 	def get_window_title_for_note_title(self, note_title):
 		progname = glib.get_application_name()
