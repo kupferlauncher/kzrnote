@@ -61,7 +61,7 @@ VIMNOTERC="""
 set guioptions-=m guioptions-=T
 set shortmess+=a
 
-" autosave quickly, and always write on exit
+" autosave quickly
 augroup vimnote
 au InsertLeave,CursorHold,CursorHoldI *.note silent! w
 au BufRead *.note setlocal autoread
@@ -72,7 +72,10 @@ augroup END
 
 set updatetime=200
 
+" enable persistent undo by default
+set undofile
 set undodir=CACHE/cache
+
 set directory=CACHE/cache
 set backupdir=CACHE/cache
 
