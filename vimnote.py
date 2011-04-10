@@ -669,10 +669,11 @@ class MainInstance (ExportedGObject):
 		"""
 		preload_id = self.generate_preload_id()
 		extra_args = ['--servername', preload_id]
-		## put the returned window in the preload table
-		self.preload_ids[preload_id] = self.start_vim_hidden(extra_args)
+		## Update self.preload_ids in on_socket_plug_added when we
+		## know that the preloaded window has "contact" with our proxy vim
+		self.start_vim_hidden(extra_args, preload_id)
 
-	def start_vim_hidden(self, extra_args=[]):
+	def start_vim_hidden(self, extra_args=[], preload_id=None):
 		"""
 		Open a new hidden Vim window
 
@@ -685,6 +686,8 @@ class MainInstance (ExportedGObject):
 		window.realize()
 		window.add(socket)
 		socket.show()
+		socket.connect("plug-added", self.on_socket_plug_added,
+		               preload_id, window)
 
 		argv = [VIM, '-g', '-f', '--socketid', '%s' % socket.get_id()]
 		argv.extend(VIM_EXTRA_FLAGS)
@@ -700,6 +703,13 @@ class MainInstance (ExportedGObject):
 
 	def on_spawn_child_setup(self):
 		try_register_pr_pdeathsig()
+
+	def on_socket_plug_added(self, socket, preload_id, window):
+		log("Plug connected to Socket")
+		if preload_id is not None:
+			log("Registering %r as ready" % preload_id)
+			## put the returned window in the preload table
+			self.preload_ids[preload_id] = window
 
 	def write_vimrc_file(self):
 		vimswpdir = os.path.join(get_notesdir(), SWPDIR)
