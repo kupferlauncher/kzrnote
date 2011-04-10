@@ -27,12 +27,6 @@ def lazy_import(name):
 		globals()[name] = __import__(name)
 
 
-NEW_NOTE_NAME = "New Note"
-MAXTITLELEN=50
-ATTICDIR="attic"
-SWPDIR="vimcache"
-DEFAULT_WIN_SIZE = (450, 450)
-
 def plainlog(*args):
 	for arg in args:
 		sys.stderr.write(unicode(arg).encode("ascii", "replace"))
@@ -49,24 +43,44 @@ def error(*args):
 	plainlog(*args)
 
 
-## Needs directory parameters
+NEW_NOTE_NAME = "New Note"
+MAXTITLELEN=50
+DEFAULT_WIN_SIZE = (450, 450)
+
+ATTICDIR="attic"
+SWPDIR="cache"
 ## set wm=2  wrapmargin för automatisk wrapping till fönsterstorlek
-## Autosave all the time:  au CursorHold <buffer> w
-VIMNOTE_SOURCE="""
-" hide clutter (menubar and toolbar)
-set guioptions-=m guioptions-=T shortmess+=a
-" wrapmargin
-set wm=2
+## CACHE, CONFIG etc is replaced by the user directories
+VIMNOTERC="""
+" NOTE: This file is overwritten regularly.
+"
+" It loads CONFIG/user.vim which
+" should be used for user customization.
+
+" hide menubar and toolbar
+set guioptions-=m guioptions-=T
+set shortmess+=a
+
+" use wrapmargin to adjust to window size
+set wm=1
+
 " autosave
-au InsertLeave,CursorHold ?* silent! w
+au InsertLeave,CursorHold,CursorHoldI ?* silent! w
 set updatetime=1000
-"""
 
-VIMNOTE_SWPSOURCE="""
-set undodir=%s directory=%s backupdir=%s
-"""
-SOURCE_FILE="%s.vim" % APPNAME
+set undodir=CACHE/cache
+set directory=CACHE/cache
+set backupdir=CACHE/cache
 
+" options you maybe want to use
+" set guifont=Monospace\ 8
+" set softtabstop=2 sw=2 et
+" set linebreak
+
+" read the user's config file
+silent! so CONFIG/user.vim
+"""
+VIMNOTERC_FILE="%s.vim" % APPNAME
 VIM_EXTRA_FLAGS=[]
 
 
@@ -81,6 +95,14 @@ def ensure_notesdir():
 
 def get_notesdir():
 	return os.path.join(glib.get_user_data_dir(), APPNAME)
+
+def get_config_dir():
+	configdir = os.path.join(glib.get_user_config_dir(), APPNAME)
+	try:
+		os.makedirs(configdir)
+	except OSError:
+		pass
+	return configdir
 
 def get_cache_dir():
 	cachedir = os.path.join(glib.get_user_cache_dir(), APPNAME)
@@ -798,15 +820,18 @@ class MainInstance (ExportedGObject):
 			self.preload_ids[preload_id] = window
 
 	def write_vimrc_file(self):
-		vimswpdir = os.path.join(get_notesdir(), SWPDIR)
+		CONFIG = get_config_dir()
+		CACHE = get_cache_dir()
+		vimswpdir = os.path.join(CACHE, SWPDIR)
 		try:
 			os.makedirs(vimswpdir, 0o700)
 		except EnvironmentError:
 			pass
-		rpath = os.path.join(get_cache_dir(), SOURCE_FILE)
+		rpath = os.path.join(CONFIG, VIMNOTERC_FILE)
 		with open(rpath, "wb") as runtimefobj:
-			runtimefobj.write(VIMNOTE_SOURCE)
-			runtimefobj.write(VIMNOTE_SWPSOURCE % (vimswpdir, vimswpdir, vimswpdir))
+			## Write in the directories in VIMNOTERC
+			runtimefobj.write(
+				VIMNOTERC.replace('CONFIG', CONFIG).replace('CACHE', CACHE))
 		return rpath
 
 	def new_vimdow_preloaded(self, name, filepath):
