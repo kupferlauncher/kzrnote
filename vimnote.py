@@ -819,9 +819,14 @@ class MainInstance (ExportedGObject):
 	def on_socket_plug_added(self, socket, preload_id, window):
 		log("Plug connected to Socket")
 		if preload_id is not None:
-			log("Registering %r as ready" % preload_id)
-			## put the returned window in the preload table
-			self.preload_ids[preload_id] = window
+			## delay registration just a bit longer
+			glib.timeout_add(100, self.after_socket_plug_added, preload_id, window)
+
+	def after_socket_plug_added(self, preload_id, window):
+		log("Registering %r as ready" % preload_id)
+		## put the returned window in the preload table
+		self.preload_ids[preload_id] = window
+		return False
 
 	def write_vimrc_file(self):
 		CONFIG = get_config_dir()
