@@ -255,6 +255,52 @@ server_name = "se.kaizer.%s" % APPNAME
 interface_name = "se.kaizer.%s" % APPNAME
 object_name = "/se/kaizer/%s" % APPNAME
 
+class NoteMetadataService (object):
+	def __init__(self):
+		self.storagefile = os.path.join(get_cache_dir(), "metadata")
+		self.geometries = {}
+
+	def load(self):
+		"""
+		Load configuration
+		"""
+		with open(self.storagefile, 'rb') as fobj:
+			for line in fobj:
+				parts = line.split()
+				if len(parts) != 5:
+					continue
+				uri = parts[0]
+				try:
+					coords = [abs(int(x)) for x in parts[1:]]
+				except ValueError:
+					pass
+				else:
+					(a,b) = coords[:2]
+					(c,d) = coords[2:]
+					self.geometries[uri] = ((a,b), (c,d))
+
+	def save(self):
+		"""
+		Save configuration
+		"""
+		with open(self.storagefile, 'wb') as outfobj:
+			for uri, geometry in self.geometries.iteritems():
+				outfobj.write("%s " % uri)
+				((a,b), (c,d)) = geometry
+				outfobj.write("%d %d %d %d" % (a,b,c,d))
+				outfobj.write("\n")
+
+	def update_window_geometry(self, window, event, notefilename):
+		note_uri = get_note_uri(notefilename)
+		self.geometries[note_uri] = (window.get_size(), window.get_position())
+
+	def get_geometry_for(self, notefilename):
+		"""
+		Return a (size, position) tuple for @notefilename
+		or None if nothing is recorded.
+		"""
+		note_uri = get_note_uri(notefilename)
+		return self.geometries.get(note_uri, None)
 
 class MainInstance (ExportedGObject):
 	__gsignals__ = {
@@ -264,6 +310,9 @@ class MainInstance (ExportedGObject):
 			(gobject.TYPE_STRING, gobject.TYPE_STRING )),
 		"note-contents-changed": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
 			(gobject.TYPE_STRING, )),
+		"note-opened": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
+			(gobject.TYPE_STRING, gobject.TYPE_PYOBJECT)),
+		## signature: filename, GtkWindow
 	}
 	def __init__(self):
 		"""Create a new service on the Session Bus
@@ -291,6 +340,8 @@ class MainInstance (ExportedGObject):
 		self.status_icon = None
 		self.connect("note-deleted", self.on_note_deleted)
 		self.connect("title-updated", self.on_note_title_updated)
+		self.connect("note-opened", self.on_note_opened)
+		self.metadata_service = NoteMetadataService()
 
 	def unregister(self):
 		dbus.Bus().release_name(server_name)
@@ -547,6 +598,7 @@ class MainInstance (ExportedGObject):
 		self.monitor = gfile.monitor_directory()
 		if self.monitor:
 			self.monitor.connect("changed", self.on_notes_monitor_changed, self.list_store)
+		self.metadata_service.load()
 		self.preload()
 
 	def on_list_view_row_activate(self, treeview, path, view_column):
@@ -585,6 +637,7 @@ class MainInstance (ExportedGObject):
 		"""
 		Close all open windows and hidden windows
 		"""
+		self.metadata_service.save()
 		self.window.hide()
 		for filepath in list(self.open_files):
 			log("closing", filepath)
@@ -612,10 +665,25 @@ class MainInstance (ExportedGObject):
 			self.file_names.pop(gfile1.get_path(), None)
 			self.reload_filemodel(model)
 
+	def on_note_opened(self, sender, filepath, window):
+		window.connect("configure-event",
+		               self.metadata_service.update_window_geometry,
+		               filepath)
+
 	def get_window_title_for_note_title(self, note_title):
 		progname = glib.get_application_name()
 		title = u"%s: %s" % (progname, note_title)
 		return title
+
+	def position_window(self, window, filepath):
+		"""
+		Modify @window and move to the correct spot for @filepath
+		"""
+		geometry = self.metadata_service.get_geometry_for(filepath)
+		if geometry is not None:
+			size, position = geometry
+			window.resize(*size)
+			window.move(*position)
 
 	def new_note_on_screen(self, filepath, title=None, screen=None, timestamp=None):
 		display_name_long = self.ensure_note_title(filepath)
@@ -741,7 +809,9 @@ class MainInstance (ExportedGObject):
 				glib.spawn_async(preload_argv,
 				                 flags=glib.SPAWN_SEARCH_PATH|glib.SPAWN_DO_NOT_REAP_CHILD)
 		glib.child_watch_add(pid, self.on_vim_remote_exit, preload_argv)
+		self.position_window(window, filepath)
 		window.present()
+		self.emit("note-opened", filepath, window)
 
 	def on_vim_remote_exit(self, pid, condition, preload_argv):
 		exit_status = os.WEXITSTATUS(condition)
@@ -756,9 +826,11 @@ class MainInstance (ExportedGObject):
 			glib.timeout_add_seconds(1, self.preload)
 			return
 		window = self.start_vim_hidden([filepath])
-		window.set_title(name)
-		window.show()
 		self.open_files[filepath] = window
+		window.set_title(name)
+		self.position_window(window, filepath)
+		window.present()
+		self.emit("note-opened", filepath, window)
 
 	def on_vim_exit(self, pid, condition, window):
 		log( "Vim Pid: %d  exited  (%x)" % (pid, condition))
