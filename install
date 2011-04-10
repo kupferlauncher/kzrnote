@@ -17,6 +17,7 @@ exec >&2
 
 DBINDIR=$DESTDIR$BINDIR
 DDBUSDIR=$DESTDIR$DBUSDIR
+DAPPDIR=$DESTDIR$DATADIR/applications
 
 echo "Installing:"
 echo "Binary: $DBINDIR"
@@ -36,3 +37,6 @@ TMPNAME="$SVC.$$"
 sed -e "s_@BINDIR@_${BINDIR}_" $SVC.in > $TMPNAME
 $INSTALL -v -D $TMPNAME "$DDBUSDIR/$SVC"
 rm -rf $TMPNAME
+
+## vimnote.desktop
+$INSTALL -v -D vimnote.desktop "$DAPPDIR/vimnote.desktop"
