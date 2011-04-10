@@ -61,23 +61,25 @@ VIMNOTERC="""
 set guioptions-=m guioptions-=T
 set shortmess+=a
 
-" use wrapmargin to adjust to window size
-set wm=1
-
 " autosave quickly, and always write on exit
-au InsertLeave,CursorHold,CursorHoldI ?* silent! w
-set updatetime=4000
-set autoread
-set autowriteall
+augroup vimnote
+au InsertLeave,CursorHold,CursorHoldI ?*.note silent! w
+au BufWinEnter ?*.note setlocal updatetime=4000
+au BufWinEnter ?*.note setlocal autoread autowriteall
+augroup END
 
 set undodir=CACHE/cache
 set directory=CACHE/cache
 set backupdir=CACHE/cache
 
-" options you maybe want to use
+" set text editing options
+" use wrapmargin to adjust to window size
+set wm=1
+set linebreak
+
+" other options you maybe want to use
 " set guifont=Monospace\ 8
 " set softtabstop=2 sw=2 et
-" set linebreak
 
 " read the user's config file
 silent! so CONFIG/user.vim
