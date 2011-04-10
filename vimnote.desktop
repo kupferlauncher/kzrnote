@@ -2,7 +2,7 @@
 Version=1.0
 Name=Vimnote
 Comment=Take notes using Vim
-Icon=vim
+Icon=vimnote
 Exec=vimnote %U
 Type=Application
 Categories=Utility;

@@ -35,8 +35,14 @@ rm -rf $TMPNAME
 SVC="se.kaizer.vimnote.service"
 TMPNAME="$SVC.$$"
 sed -e "s_@BINDIR@_${BINDIR}_" $SVC.in > $TMPNAME
-$INSTALL -v -D $TMPNAME "$DDBUSDIR/$SVC"
+$INSTALL -v -m 644 -D $TMPNAME "$DDBUSDIR/$SVC"
 rm -rf $TMPNAME
 
 ## vimnote.desktop
-$INSTALL -v -D vimnote.desktop "$DAPPDIR/vimnote.desktop"
+$INSTALL -v -m 644 -D vimnote.desktop "$DAPPDIR/vimnote.desktop"
+
+## vimnote.svg
+DICONDIR=$DESTDIR$DATADIR/icons/hicolor
+DICONDEST=$DICONDIR/scalable/apps
+$INSTALL -v -m 644 -D vimnote.svg "$DICONDEST/vimnote.svg"
+gtk-update-icon-cache -q -f -t "$DICONDIR"

@@ -2,7 +2,7 @@
 
 APPNAME = "vimnote"
 VIM = 'vim'
-ICONNAME = 'vim'
+ICONNAME = 'vimnote'
 
 import errno
 import locale
@@ -564,6 +564,7 @@ class MainInstance (ExportedGObject):
 		status_icon.set_visible(True)
 		self.status_icon = status_icon
 
+		gtk.window_set_default_icon_name(ICONNAME)
 		self.window = gtk.Window()
 		self.window.set_default_size(300, 400)
 		self.list_view = gtk.TreeView()
