@@ -264,20 +264,24 @@ class NoteMetadataService (object):
 		"""
 		Load configuration
 		"""
-		with open(self.storagefile, 'rb') as fobj:
-			for line in fobj:
-				parts = line.split()
-				if len(parts) != 5:
-					continue
-				uri = parts[0]
-				try:
-					coords = [abs(int(x)) for x in parts[1:]]
-				except ValueError:
-					pass
-				else:
-					(a,b) = coords[:2]
-					(c,d) = coords[2:]
-					self.geometries[uri] = ((a,b), (c,d))
+		try:
+			with open(self.storagefile, 'rb') as fobj:
+				for line in fobj:
+					parts = line.split()
+					if len(parts) != 5:
+						continue
+					uri = parts[0]
+					try:
+						coords = [abs(int(x)) for x in parts[1:]]
+					except ValueError:
+						pass
+					else:
+						(a,b) = coords[:2]
+						(c,d) = coords[2:]
+						self.geometries[uri] = ((a,b), (c,d))
+		except EnvironmentError as exc:
+			if exc.errno != errno.ENOENT:
+				raise
 
 	def save(self):
 		"""
