@@ -458,7 +458,7 @@ class MainInstance (ExportedGObject):
 	## Vimnote-specific D-Bus methods
 	@dbus.service.method(interface_name, in_signature="asss", out_signature="s")
 	def VimnoteCommandline(self, uargv, display, desktop_startup_id):
-		return self.handle_commandline(uargv)
+		return self.handle_commandline(uargv, display, desktop_startup_id)
 
 	def reload_filemodel(self, model):
 		notes_dir = get_notesdir()
@@ -626,18 +626,35 @@ class MainInstance (ExportedGObject):
 	def new_note(self, sender):
 		return self.new_note_on_screen(get_new_note_name())
 
-	def handle_commandline(self, arguments):
+	def handle_commandline(self, arguments, display, desktop_startup_id):
 		"""
 		When handling commandline:
 
 		Open The Note URIS on the commandline,
 		if nothing else is there, present the main window.
 
+		@arguments: A unicode sequence of arguments
+		@display: the name of the X screen (not implemented)
+		@desktop_startup_id: $DESKTOP_STARTUP_ID from invocation
+
 		returns: String output (Usage help if applicable)
 		"""
-		log("ahndle commandline", arguments)
+		log("handle commandline", arguments, display, desktop_startup_id)
+
+		## parse out timestamp from startup id
+		timestamp = 0
+		if '_TIME' in desktop_startup_id:
+			try:
+				timestamp = abs(int(desktop_startup_id.split('_TIME')[1]))
+			except ValueError:
+				pass
 		if not arguments:
-			self.window.present()
+			if timestamp:
+				log(timestamp)
+				self.window.set_startup_id(desktop_startup_id)
+				self.window.present_with_time(timestamp)
+			else:
+				self.window.present()
 		for noteuri in arguments:
 			self.DisplayNote(noteuri)
 		return ""
@@ -743,12 +760,12 @@ class MainInstance (ExportedGObject):
 			raise RuntimeError("Unknown window closed %d %d" % (pid, condition))
 		window.destroy()
 
-def service_send_commandline(uargv):
+def service_send_commandline(uargv, display, desktop_startup_id):
 	bus = dbus.Bus()
 	proxy_obj = bus.get_object(server_name, object_name)
 	iface = dbus.Interface(proxy_obj, interface_name)
 	try:
-		iface.VimnoteCommandline(uargv,"", "")
+		iface.VimnoteCommandline(uargv, display, desktop_startup_id)
 	except dbus.DBusException as exc:
 		error(exc)
 	#iface.VimnoteCommandline(uargv,"", "", error_handler=_dummy, reply_handler=_dummy)
@@ -765,6 +782,7 @@ def main(argv):
 	glib.set_application_name(APPNAME)
 	glib.set_prgname(APPNAME)
 	uargv = [fromlocaleencoding(arg, errors=False) for arg in argv[1:]]
+	desktop_startup_id = os.getenv("DESKTOP_STARTUP_ID", "")
 	try:
 		m = MainInstance()
 	except RuntimeError as exc:
@@ -773,13 +791,13 @@ def main(argv):
 	except NameError as exc:
 		log(exc)
 		log("An instance already running, passing on commandline...")
-		service_send_commandline(uargv)
+		service_send_commandline(uargv, "", desktop_startup_id)
 		return 0
 	lazy_import("uuid")
 	lazy_import("gtk")
 	lazy_import("gio")
 	glib.idle_add(m.setup_gui)
-	glib.idle_add(m.handle_commandline, uargv)
+	glib.idle_add(m.handle_commandline, uargv, "", desktop_startup_id)
 	ensure_notesdir()
 	try:
 		gtk.main()
