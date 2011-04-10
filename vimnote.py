@@ -63,7 +63,7 @@ set shortmess+=a
 
 " autosave quickly
 augroup vimnote
-au InsertLeave,CursorHold,CursorHoldI *.note silent! w
+au InsertLeave,CursorHold,CursorHoldI *.note silent! update
 au BufRead *.note setlocal autoread
 
 au BufReadPre *.note set noshowcmd
