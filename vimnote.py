@@ -63,10 +63,14 @@ set shortmess+=a
 
 " autosave quickly, and always write on exit
 augroup vimnote
-au InsertLeave,CursorHold,CursorHoldI ?*.note silent! w
-au BufWinEnter ?*.note setlocal updatetime=4000
-au BufWinEnter ?*.note setlocal autoread autowriteall
+au InsertLeave,CursorHold,CursorHoldI *.note silent! w
+au BufRead *.note setlocal autoread
+
+au BufReadPre *.note set noshowcmd
+au BufWinEnter *.note set showcmd
 augroup END
+
+set updatetime=200
 
 set undodir=CACHE/cache
 set directory=CACHE/cache
@@ -852,10 +856,9 @@ class MainInstance (ExportedGObject):
 		window.set_title(name)
 		self.open_files[filepath] = window
 
-		## Send it this way so that no message is shown when loading
 		## Note: Filename requires escaping (but our defaults are safe ones)
 		preload_argv = [VIM, '-g', '-f', '--servername', preload_id,
-		                '--remote-send', '<ESC>:e %s<CR><CR>' % filepath]
+		                '--remote-send', '<ESC>:e %s<CR>' % filepath]
 
 		log("Using preloaded", preload_argv)
 		## watch this process
