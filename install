@@ -44,5 +44,15 @@ $INSTALL -v -m 644 -D vimnote.desktop "$DAPPDIR/vimnote.desktop"
 ## vimnote.svg
 DICONDIR=$DESTDIR$DATADIR/icons/hicolor
 DICONDEST=$DICONDIR/scalable/apps
-$INSTALL -v -m 644 -D vimnote.svg "$DICONDEST/vimnote.svg"
-gtk-update-icon-cache -q -f -t "$DICONDIR"
+$INSTALL -v -m 644 -D vimnote.svg "$DICONDEST/scalable/apps/vimnote.svg"
+trap "gtk-update-icon-cache -q -f -t $DICONDIR" EXIT
+
+type rsvg-convert >/dev/null || { echo "Skipping png icons, no rsvg-convert"; exit 0; }
+## vimnote.png from svg
+for sz in 24 48 128
+do
+	T="vimnote_$sz.png"
+	rsvg-convert -w $sz -h $sz vimnote.svg > $T
+	$INSTALL -v -m 644 -D $T "$DICONDIR/${sz}x${sz}/apps/vimnote.png"
+	rm -f $T
+done
