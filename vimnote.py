@@ -3,6 +3,7 @@
 APPNAME = "vimnote"
 VIM = 'vim'
 ICONNAME = 'vimnote'
+VERSION='0.1'
 
 import errno
 import locale
@@ -563,6 +564,10 @@ class MainInstance (ExportedGObject):
 	def GetAllNotesWithTag(self, tagname):
 		## FIXME
 		return []
+
+	@dbus.service.method(interface_name, out_signature="s")
+	def Version(self):
+		return "%s %s" % (APPNAME, VERSION)
 
 	## Vimnote-specific D-Bus methods
 	@dbus.service.method(interface_name, in_signature="asss", out_signature="s")
