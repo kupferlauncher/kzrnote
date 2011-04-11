@@ -42,11 +42,14 @@ def error(*args):
 	sys.stderr.write("Error in %s: " % __name__)
 	plainlog(*args)
 
+def _(x):
+	return x
 
 DEFAULT_NOTE_NAME =u"Empty Note"
 NEW_NOTE_TEMPLATE=u"Note %s"
 MAXTITLELEN=50
 DEFAULT_WIN_SIZE = (450, 450)
+NOTE_ICON = "gtk-file"
 
 ATTICDIR="attic"
 SWPDIR="cache"
@@ -665,8 +668,7 @@ class MainInstance (ExportedGObject):
 
 
 	def setup_gui(self):
-		status_icon = gtk.StatusIcon()
-		status_icon.set_from_icon_name(ICONNAME)
+		status_icon = gtk.status_icon_new_from_icon_name(ICONNAME)
 		status_icon.set_tooltip_text(APPNAME)
 		status_icon.set_visible(True)
 		self.status_icon = status_icon
@@ -708,7 +710,8 @@ class MainInstance (ExportedGObject):
 		self.window.add(vbox)
 		self.window.present()
 		self.window.connect("delete-event", self.window.hide_on_delete)
-		status_icon.connect("activate", lambda x: self.window.present())
+		status_icon.connect("activate", self.on_status_icon_clicked)
+		status_icon.connect("popup-menu", self.on_status_icon_menu)
 
 		gfile = gio.File(path=get_notesdir())
 		self.monitor = gfile.monitor_directory()
@@ -722,6 +725,55 @@ class MainInstance (ExportedGObject):
 		titer = store.get_iter(path)
 		(filepath, ) = store.get(titer, 0)
 		self.display_note_by_file(filepath)
+
+	def on_status_icon_clicked(self, widget):
+		## on activate, emit a signal to open the menu
+		widget.emit("popup-menu", 1, gtk.get_current_event_time())
+
+	def on_status_icon_menu(self, widget, button, activate_time):
+		show_num_recent = 15
+
+		def present_window(sender):
+			self.window.present()
+
+		def display_note(sender, filename):
+			self.display_note_by_file(filename)
+
+		## make and show a popup menu
+		## None marks the separators and the recent notes
+		actions = [
+			(gtk.STOCK_NEW, _("Create _New Note"), self.create_open_note),
+			(gtk.STOCK_FIND, _("_Show All Notes"), present_window),
+			None,
+			(gtk.STOCK_QUIT, None, gtk.main_quit),
+		]
+
+		menu = gtk.Menu()
+
+		for action in actions:
+			if action is not None:
+				icon, title, target = action
+				mitem = gtk.ImageMenuItem(icon)
+				if title:
+					mitem.set_label(title)
+				mitem.connect("activate", target)
+				menu.append(mitem)
+			else:
+				## insert the recent notes
+				menu.append(gtk.SeparatorMenuItem())
+				notes_sorted = list(self.get_note_filenames(True))
+				for filename in notes_sorted[:show_num_recent]:
+					display_name = self.ensure_note_title(filename)
+					mitem = gtk.ImageMenuItem(NOTE_ICON)
+					mitem.set_label(display_name)
+					mitem.set_use_underline(False)
+					mitem.set_always_show_image(True)
+					mitem.connect("activate", display_note, filename)
+					menu.append(mitem)
+				menu.append(gtk.SeparatorMenuItem())
+		menu.show_all()
+		menu.popup(None, None, gtk.status_icon_position_menu,
+		           button, activate_time, widget)
 
 	def display_note_by_file(self, filename):
 		if filename in self.open_files:
