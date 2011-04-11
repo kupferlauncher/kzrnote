@@ -437,6 +437,10 @@ class MainInstance (ExportedGObject):
 		else:
 			return False
 
+	@dbus.service.method(interface_name)
+	def DisplaySearch(self):
+		return self.VimnoteCommandline([], '', '')
+
 	@dbus.service.method(interface_name, in_signature="s", out_signature="s")
 	def FindNote(self, linked_title):
 		"""
