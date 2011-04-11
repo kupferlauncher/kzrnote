@@ -203,10 +203,13 @@ def get_note_paths():
 def get_note(note_uuid):
 	return os.path.join(get_notesdir(), note_uuid + NOTE_SUFFIX)
 
-def is_note(filename):
-	return (filename.startswith(get_notesdir()) and os.path.exists(filename) and
+def is_valid_note_filename(filename):
+	return (filename.startswith(get_notesdir())  and
 	        len(os.path.basename(filename)) == FILENAME_LEN and
 	        filename.endswith(NOTE_SUFFIX))
+
+def is_note(filename):
+	return is_valid_note_filename(filename) and os.path.exists(filename)
 
 def get_new_note_name():
 	for retry in xrange(1000):
@@ -341,8 +344,11 @@ class NoteMetadataService (object):
 
 class MainInstance (ExportedGObject):
 	__gsignals__ = {
-		"note-deleted": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
+		"note-created": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
 			(gobject.TYPE_STRING, )),
+		## signature: filepath, bool:user_action
+		"note-deleted": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
+			(gobject.TYPE_STRING, gobject.TYPE_BOOLEAN)),
 		"title-updated": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
 			(gobject.TYPE_STRING, gobject.TYPE_STRING )),
 		"note-contents-changed": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
@@ -554,6 +560,51 @@ class MainInstance (ExportedGObject):
 			display_name = self.ensure_note_title(filename)
 			model.append((filename, display_name))
 
+	def model_reassess_file(self, model, filename, addrm=False, change=False):
+		"""
+		Examine changed @filename and decide
+		whether to insert, delete, update it
+
+		@addrm: if created/deleted
+		@change: if changed
+		"""
+		if not is_valid_note_filename(filename):
+			return False
+		## linear search. Will also hit the most recently
+		## changed files fast anyway
+		row_filename, row_title = (None, None)
+		existed_before = True
+		rowidx = None
+		for idx, row in enumerate(model):
+			row_filename, row_title = row
+			if row_filename == filename:
+				rowidx = idx
+				break
+		else:
+			existed_before = False
+		exists_now = is_note(filename)
+		if not existed_before and exists_now:
+			new_title = self.ensure_note_title(filename)
+			model.insert(0, (filename, new_title))
+			self.emit("note-created", filename)
+		elif existed_before and exists_now:
+			self.reload_file_note_title(filename)
+			new_title = self.file_names[filename]
+			## write in new title
+			model[rowidx] = (filename, new_title)
+			## Move it to the top
+			rowpath = (rowidx, )
+			rowiter = model.get_iter(rowpath)
+			topiter = model.get_iter((0, ))
+			model.move_before(rowiter, topiter)
+			self.emit("note-contents-changed", filename)
+		elif existed_before and not exists_now:
+			del model[rowidx]
+			self.emit("note-deleted", filename, False)
+		else:
+			assert False, "unreachable"
+
+
 	def get_note_change_date(self, filename):
 		"""
 		Get the change date for @filename (as an number)
@@ -695,7 +746,7 @@ class MainInstance (ExportedGObject):
 		except OSError:
 			pass
 		os.rename(filepath, os.path.join(attic_dir, os.path.basename(filepath)))
-		self.emit("note-deleted", filepath)
+		self.emit("note-deleted", filepath, True)
 
 	def close_all(self):
 		"""
@@ -713,8 +764,9 @@ class MainInstance (ExportedGObject):
 			gtk.main_iteration()
 		time.sleep(0.5)
 
-	def on_note_deleted(self, sender, filepath):
-		if filepath in self.open_files:
+	def on_note_deleted(self, sender, filepath, user_action):
+		## only close its window if the user deleted it
+		if filepath in self.open_files and user_action:
 			self.open_files.pop(filepath).destroy()
 
 	def on_note_title_updated(self, sender, filepath, new_title):
@@ -724,10 +776,9 @@ class MainInstance (ExportedGObject):
 
 	def on_notes_monitor_changed(self, monitor, gfile1, gfile2, event, model):
 		if event in (gio.FILE_MONITOR_EVENT_CREATED, gio.FILE_MONITOR_EVENT_DELETED):
-			self.reload_filemodel(model)
+			self.model_reassess_file(model, gfile1.get_path(), addrm=True)
 		if event in (gio.FILE_MONITOR_EVENT_CHANGES_DONE_HINT, ):
-			self.file_names.pop(gfile1.get_path(), None)
-			self.reload_filemodel(model)
+			self.model_reassess_file(model, gfile1.get_path(), change=True)
 
 	def on_note_opened(self, sender, filepath, window):
 		window.connect("configure-event",
@@ -921,7 +972,7 @@ class MainInstance (ExportedGObject):
 				del self.open_files[k]
 				break
 		else:
-			raise RuntimeError("Unknown window closed %d %d" % (pid, condition))
+			log("Window closed but already unregistered: %d %d" % (pid, condition))
 		window.destroy()
 
 def service_send_commandline(uargv, display, desktop_startup_id):
