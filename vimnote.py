@@ -896,8 +896,8 @@ class MainInstance (ExportedGObject):
 
 	def create_open_note(self, sender):
 		note_name = get_new_note_name()
-		time_lstr = time.strftime("%c")
-		lcontent = tolocaleencoding(NEW_NOTE_TEMPLATE) % time_lstr
+		time_ustr = fromlocaleencoding(time.strftime("%c"), errors=False)
+		lcontent = tonoteencoding(NEW_NOTE_TEMPLATE % time_ustr, errors=False)
 		touch_filename(note_name, lcontent)
 		return self.open_note_on_screen(note_name)
 
