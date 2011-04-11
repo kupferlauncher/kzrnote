@@ -43,7 +43,8 @@ def error(*args):
 	plainlog(*args)
 
 
-NEW_NOTE_NAME = "New Note"
+DEFAULT_NOTE_NAME =u"Empty Note"
+NEW_NOTE_TEMPLATE=u"Note %s"
 MAXTITLELEN=50
 DEFAULT_WIN_SIZE = (450, 450)
 
@@ -660,7 +661,7 @@ class MainInstance (ExportedGObject):
 					break
 		except EnvironmentError:
 			pass
-		return NEW_NOTE_NAME
+		return DEFAULT_NOTE_NAME
 
 
 	def setup_gui(self):
@@ -684,7 +685,7 @@ class MainInstance (ExportedGObject):
 		self.list_view.connect("row-activated", self.on_list_view_row_activate)
 		toolbar = gtk.Toolbar()
 		new = gtk.ToolButton(gtk.STOCK_NEW)
-		new.connect("clicked", self.new_note)
+		new.connect("clicked", self.create_open_note)
 		delete = gtk.ToolButton(gtk.STOCK_DELETE)
 		delete.connect("clicked", self.on_delete_row_cliecked, self.list_view)
 		quit = gtk.ToolButton(gtk.STOCK_QUIT)
@@ -726,7 +727,7 @@ class MainInstance (ExportedGObject):
 		if filename in self.open_files:
 			self.open_files[filename].present()
 		else:
-			self.new_note_on_screen(filename)
+			self.open_note_on_screen(filename)
 
 	def on_delete_row_cliecked(self, toolitem, treeview):
 		path, column = treeview.get_cursor()
@@ -796,11 +797,6 @@ class MainInstance (ExportedGObject):
 		window.set_border_width(bw+1)
 		glib.timeout_add(100,window.set_border_width, bw)
 
-	def get_window_title_for_note_title(self, note_title):
-		progname = glib.get_application_name()
-		title = u"%s: %s" % (progname, note_title)
-		return title
-
 	def position_window(self, window, filepath):
 		"""
 		Modify @window and move to the correct spot for @filepath
@@ -811,14 +807,27 @@ class MainInstance (ExportedGObject):
 			window.resize(*size)
 			window.move(*position)
 
-	def new_note_on_screen(self, filepath, title=None, screen=None, timestamp=None):
+	def get_window_title_for_note_title(self, note_title):
+		progname = glib.get_application_name()
+		title = u"%s: %s" % (progname, note_title)
+		return title
+
+	def open_note_on_screen(self, filepath, title=None, screen=None, timestamp=None):
+		"""
+		Open @filepath that does not have a window open
+		since before
+		"""
 		display_name_long = self.ensure_note_title(filepath)
 		self.file_names[filepath] = display_name_long
 		title = self.get_window_title_for_note_title(display_name_long)
 		self.new_vimdow(title, filepath)
 
-	def new_note(self, sender):
-		return self.new_note_on_screen(get_new_note_name())
+	def create_open_note(self, sender):
+		note_name = get_new_note_name()
+		time_lstr = time.strftime("%c")
+		lcontent = tolocaleencoding(NEW_NOTE_TEMPLATE) % time_lstr
+		touch_filename(note_name, lcontent)
+		return self.open_note_on_screen(note_name)
 
 	def handle_commandline(self, arguments, display, desktop_startup_id):
 		"""
