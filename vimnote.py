@@ -440,7 +440,7 @@ class MainInstance (ExportedGObject):
 	@dbus.service.method(interface_name, in_signature="", out_signature="as")
 	def ListAllNotes(self):
 		all_notes = []
-		for note in get_note_paths():
+		for note in self.get_note_filenames(True):
 			all_notes.append(get_note_uri(note))
 		return all_notes
 
@@ -461,8 +461,7 @@ class MainInstance (ExportedGObject):
 		Raises OSError for internal filesystem error
 		"""
 		filename = get_filename_for_note_uri(uri)
-		stat_res = os.stat(filename)
-		return stat_res.st_mtime
+		return self.get_note_change_date(filename)
 
 	@dbus.service.method(interface_name, in_signature="s", out_signature="s")
 	def GetNoteContents(self, uri):
@@ -551,9 +550,32 @@ class MainInstance (ExportedGObject):
 	def reload_filemodel(self, model):
 		notes_dir = get_notesdir()
 		model.clear()
-		for filename in get_note_paths():
+		for filename in self.get_note_filenames(True):
 			display_name = self.ensure_note_title(filename)
 			model.append((filename, display_name))
+
+	def get_note_change_date(self, filename):
+		"""
+		Get the change date for @filename (as an number)
+
+		raises OSError on error when reading @filename
+		"""
+		stat_res = os.stat(filename)
+		return stat_res.st_mtime
+
+	def get_note_filenames(self, date_sort=False):
+		"""
+		Return a sequence of file paths for all notes
+
+		@date_sort: if True, sort by most recent first
+		"""
+		filenames = get_note_paths()
+		if date_sort:
+			return sorted(filenames,
+			              key=self.get_note_change_date,
+			              reverse=True)
+		else:
+			return filenames
 
 	def has_note_by_title(self, utitle):
 		"""
