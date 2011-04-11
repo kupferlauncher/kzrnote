@@ -389,9 +389,16 @@ class MainInstance (ExportedGObject):
 		self.connect("title-updated", self.on_note_title_updated)
 		self.connect("note-opened", self.on_note_opened)
 		self.metadata_service = NoteMetadataService()
+		self.ready_to_display_notes = False
 
 	def unregister(self):
 		dbus.Bus().release_name(server_name)
+
+	def wait_for_display_notes(self):
+		log("Wait for display_notes, setup done: %s" %
+		    self.ready_to_display_notes)
+		while gtk.events_pending() and not self.ready_to_display_notes:
+			gtk.main_iteration()
 
 	@dbus.service.method(interface_name, in_signature="", out_signature="s")
 	def CreateNote(self):
@@ -424,6 +431,7 @@ class MainInstance (ExportedGObject):
 		"""
 		filename = get_filename_for_note_uri(uri)
 		if is_note(filename):
+			self.wait_for_display_notes()
 			self.display_note_by_file(filename)
 			return True
 		else:
@@ -667,6 +675,13 @@ class MainInstance (ExportedGObject):
 		return DEFAULT_NOTE_NAME
 
 
+	def setup_basic(self):
+		"""
+		Setup basic data needed for displaying notes
+		"""
+		self.metadata_service.load()
+		self.ready_to_display_notes = True
+
 	def setup_gui(self):
 		status_icon = gtk.status_icon_new_from_icon_name(ICONNAME)
 		status_icon.set_tooltip_text(APPNAME)
@@ -719,7 +734,6 @@ class MainInstance (ExportedGObject):
 		self.monitor = gfile.monitor_directory()
 		if self.monitor:
 			self.monitor.connect("changed", self.on_notes_monitor_changed, self.list_store)
-		self.metadata_service.load()
 		self.preload()
 
 	def on_list_view_row_activate(self, treeview, path, view_column):
@@ -1074,6 +1088,7 @@ def main(argv):
 	lazy_import("uuid")
 	lazy_import("gtk")
 	lazy_import("gio")
+	glib.idle_add(m.setup_basic)
 	glib.idle_add(m.setup_gui)
 	glib.idle_add(m.handle_commandline, uargv, "", desktop_startup_id)
 	ensure_notesdir()
