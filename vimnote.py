@@ -935,20 +935,18 @@ class MainInstance (ExportedGObject):
 		return ""
 
 	@classmethod
-	def generate_preload_id(cls):
+	def generate_vim_server_id(cls):
 		return "__%s_%s_" % (APPNAME, time.time())
 
 	def preload(self):
 		"""
 		Open a new hidden Vim window
 		"""
-		preload_id = self.generate_preload_id()
-		extra_args = ['--servername', preload_id]
-		## Update self.preload_ids in on_socket_plug_added when we
+		## Update self.preload_ids in self.on_socket_plug_added when we
 		## know that the preloaded window has "contact" with our proxy vim
-		self.start_vim_hidden(extra_args, preload_id)
+		self.start_vim_hidden([], is_preload=True)
 
-	def start_vim_hidden(self, extra_args=[], preload_id=None):
+	def start_vim_hidden(self, extra_args=[], is_preload=False):
 		"""
 		Open a new hidden Vim window
 
@@ -956,15 +954,18 @@ class MainInstance (ExportedGObject):
 		"""
 		window = gtk.Window()
 		window.set_default_size(*DEFAULT_WIN_SIZE)
+		server_id = self.generate_vim_server_id()
 
 		socket = gtk.Socket()
 		window.realize()
 		window.add(socket)
 		socket.show()
 		socket.connect("plug-added", self.on_socket_plug_added,
-		               preload_id, window)
+		               server_id, window, is_preload)
+
 
 		argv = [VIM, '-g', '-f', '--socketid', '%s' % socket.get_id()]
+		argv.extend(['--servername', server_id])
 		argv.extend(VIM_EXTRA_FLAGS)
 		argv.extend(['-c', 'so %s' % self.write_vimrc_file()])
 		argv.extend(extra_args)
@@ -979,16 +980,16 @@ class MainInstance (ExportedGObject):
 	def on_spawn_child_setup(self):
 		try_register_pr_pdeathsig()
 
-	def on_socket_plug_added(self, socket, preload_id, window):
+	def on_socket_plug_added(self, socket, server_id, window, is_preload):
 		log("Plug connected to Socket")
-		if preload_id is not None:
+		if is_preload:
 			## delay registration just a bit longer
-			glib.timeout_add(100, self.after_socket_plug_added, preload_id, window)
+			glib.timeout_add(100, self.after_socket_plug_added, server_id, window)
 
-	def after_socket_plug_added(self, preload_id, window):
-		log("Registering %r as ready" % preload_id)
+	def after_socket_plug_added(self, server_id, window):
+		log("Registering %r as ready" % server_id)
 		## put the returned window in the preload table
-		self.preload_ids[preload_id] = window
+		self.preload_ids[server_id] = window
 		return False
 
 	def write_vimrc_file(self):
