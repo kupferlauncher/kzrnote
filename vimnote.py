@@ -56,11 +56,18 @@ ATTICDIR="attic"
 SWPDIR="cache"
 ## set wm=2  wrapmargin för automatisk wrapping till fönsterstorlek
 ## CACHE, CONFIG etc is replaced by the user directories
-VIMNOTERC="""
+VIMNOTERC=r"""
 " NOTE: This file is overwritten regularly.
 "
 " It loads CONFIG/user.vim which
 " should be used for user customization.
+
+" Don't source this when its already been loaded or &compatible is set.
+if &cp || exists('g:vimnote_loaded')
+  finish
+endif
+
+let g:vimnote_loaded = 1
 
 " hide menubar and toolbar
 set guioptions-=m guioptions-=T
@@ -89,9 +96,35 @@ set backupdir=CACHE/cache
 set wm=1
 set linebreak
 
+let s:vimnote_service = 'se.kaizer.vimnote'
+let s:vimnote_object = '/se/kaizer/vimnote'
+let s:vimnote_interface = 'se.kaizer.vimnote'
+
+function! VimnoteCommand (cmd, arg, sender)
+	silent exe '!dbus-send' '--type=method_call' '--print-reply'
+	 \ '--dest=' .  s:vimnote_service s:vimnote_object
+	 \ s:vimnote_interface . '.VimnoteCommand'
+	 \ 'string:' . a:cmd 'string:' . a:arg 'string:' . a:sender
+endfunction
+
+function! s:DeleteNote()
+	call VimnoteCommand('Delete', '', expand("%:p"))
+endfunction
+
+function! s:NewNote(notename)
+	" empty shellescaped string
+	if a:notename != "''"
+		call VimnoteCommand('Open', a:notename, expand("%:p"))
+	else
+		call VimnoteCommand('New', '', expand("%:p"))
+	endif
+endfunction
+
+command! -bar -nargs=? Note call s:NewNote(shellescape(<q-args>))
+command! -bar DeleteNote call s:DeleteNote()
+
 " other options you maybe want to use
 " set guifont=Monospace\ 8
-" set softtabstop=2 sw=2 et
 
 " read the user's config file
 silent! so CONFIG/user.vim
@@ -576,6 +609,27 @@ class MainInstance (ExportedGObject):
 	def VimnoteCommandline(self, uargv, display, desktop_startup_id):
 		return self.handle_commandline(uargv, display, desktop_startup_id)
 
+	## Vimnote-specific D-Bus methods
+	@dbus.service.method(interface_name, in_signature="sss", out_signature="b")
+	def VimnoteCommand(self, commandname, argument, sfilename):
+		log("VimnoteCommand: %s, %s, %s" % (commandname, argument, sfilename))
+		if not is_note(sfilename):
+			raise ValueError("'%s' is not a valid sender note" % sfilename)
+		if commandname == 'New':
+			self.create_open_note(None)
+			return True
+		if commandname == 'Delete':
+			self.delete_note(sfilename)
+			return True
+		if commandname == 'Open':
+			log("Open: %s" % argument)
+			filename = self.has_note_by_title(argument, False)
+			if filename and is_note(filename):
+				self.display_note_by_file(filename)
+				return True
+			return False
+		raise ValueError("'%s' is not a supported command" % commandname)
+
 	@dbus.service.method(interface_name)
 	def Quit(self):
 		gtk.main_quit()
@@ -655,7 +709,7 @@ class MainInstance (ExportedGObject):
 		else:
 			return filenames
 
-	def has_note_by_title(self, utitle):
+	def has_note_by_title(self, utitle, case_sensitive=True):
 		"""
 		Return (the first) filename if exists, None otherwise
 
@@ -663,7 +717,9 @@ class MainInstance (ExportedGObject):
 		"""
 		utitle = utitle[:MAXTITLELEN]
 		for filename, note_title in self.file_names.iteritems():
-			if note_title == utitle:
+			if case_sensitive and note_title == utitle:
+				return filename
+			elif not case_sensitive and note_title.lower() == utitle.lower():
 				return filename
 		return None
 
