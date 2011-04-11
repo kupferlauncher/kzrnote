@@ -158,7 +158,6 @@ def fromlocaleencoding(lstr, errors=True):
 	else:
 		return lstr.decode(enc, 'replace')
 
-
 def tonoteencoding(ustr, errors=True):
 	"""
 	Return a byte string in the note encoding from @ustr
@@ -170,6 +169,9 @@ def fromnoteencoding(lstr, errors=True):
 	Return a unicode string from the note-encoded @lstr
 	"""
 	return fromlocaleencoding(lstr, errors)
+
+def fromgtkstring(gtkstr):
+	return gtkstr.decode("utf-8") if isinstance(gtkstr, str) else gtkstr
 
 def toasciiuri(uuri):
 	return uuri.encode("utf-8") if isinstance(uuri, unicode) else uuri
@@ -715,6 +717,14 @@ class MainInstance (ExportedGObject):
 		self.list_view.set_search_column(1)
 		self.list_view.show()
 		self.list_view.connect("row-activated", self.on_list_view_row_activate)
+
+		## setup the list view to match searches by any substring
+		## (the default only matches prefixes)
+		def search_cmp(model, column, key, miter):
+			key = fromgtkstring(key).lower()
+			## NOTE: Return *False* for matches
+			return key not in model.get_value(miter, column).lower()
+		self.list_view.set_search_equal_func(search_cmp)
 		toolbar = gtk.Toolbar()
 		new = gtk.ToolButton(gtk.STOCK_NEW)
 		new.set_label(_("Create _New Note"))
