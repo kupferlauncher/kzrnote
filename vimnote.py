@@ -103,7 +103,7 @@ VIM_EXTRA_FLAGS=[]
 #:set shortmess+=T
 def ensure_notesdir():
 	try:
-		os.makedirs(get_notesdir())
+		os.makedirs(get_notesdir(), 0o700)
 	except OSError as exc:
 		if not exc.errno == errno.EEXIST:
 			raise
@@ -114,7 +114,7 @@ def get_notesdir():
 def get_config_dir():
 	configdir = os.path.join(glib.get_user_config_dir(), APPNAME)
 	try:
-		os.makedirs(configdir)
+		os.makedirs(configdir, 0o700)
 	except OSError:
 		pass
 	return configdir
@@ -122,7 +122,7 @@ def get_config_dir():
 def get_cache_dir():
 	cachedir = os.path.join(glib.get_user_cache_dir(), APPNAME)
 	try:
-		os.makedirs(cachedir)
+		os.makedirs(cachedir, 0o700)
 	except OSError:
 		pass
 	return cachedir
