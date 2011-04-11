@@ -574,6 +574,10 @@ class MainInstance (ExportedGObject):
 	def VimnoteCommandline(self, uargv, display, desktop_startup_id):
 		return self.handle_commandline(uargv, display, desktop_startup_id)
 
+	@dbus.service.method(interface_name)
+	def Quit(self):
+		gtk.main_quit()
+
 	def reload_filemodel(self, model):
 		notes_dir = get_notesdir()
 		model.clear()
