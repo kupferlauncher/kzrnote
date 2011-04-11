@@ -683,6 +683,8 @@ class MainInstance (ExportedGObject):
 		filename_col = gtk.TreeViewColumn("Note", cell, text=1)
 		self.list_view.append_column(filename_col)
 		self.reload_filemodel(self.list_store)
+		self.list_view.set_rules_hint(True)
+		self.list_view.set_search_column(1)
 		self.list_view.show()
 		self.list_view.connect("row-activated", self.on_list_view_row_activate)
 		toolbar = gtk.Toolbar()
