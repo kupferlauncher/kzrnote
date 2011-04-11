@@ -1021,7 +1021,7 @@ class MainInstance (ExportedGObject):
 			self.new_vimdow_preloaded(name, filepath)
 			glib.timeout_add_seconds(1, self.preload)
 			return
-		window = self.start_vim_hidden([filepath])
+		window = self.start_vim_hidden(['-c', 'e %s' % filepath])
 		self.open_files[filepath] = window
 		window.set_title(name)
 		self.position_window(window, filepath)
