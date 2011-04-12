@@ -176,8 +176,12 @@ function! s:CompleteNote(arglead, cmdline, cursorpos)
 endfunction
 
 so /home/ulrik/pt/proj/vimnote/notemode.vim
+augroup vimnote
 au BufWinEnter *.note
 	\ if g:vimnote_link_notes == 1 | call KaizerNotesHighlightTitles(0) | endif
+au Syntax *
+	\ if g:vimnote_link_notes == 1 | call KaizerNotesHighlightTitles(1) | endif
+augroup END
 
 command! -bar -nargs=* -complete=customlist,s:CompleteNote
          \ Note call s:NewNote(shellescape(<q-args>))
