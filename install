@@ -27,7 +27,9 @@ echo "Using python: $PYTHON"
 ## Make vimnote
 TMPNAME="vimnote.$$"
 echo "#!$PYTHON" > $TMPNAME
-cat "vimnote.py" >> $TMPNAME
+cat "vimnote.py" | sed '/so .\/notemode.vim/ {
+		r ./notemode.vim
+		d  }' >> $TMPNAME
 $INSTALL -v -D $TMPNAME "$DBINDIR/vimnote"
 rm -rf $TMPNAME
 
