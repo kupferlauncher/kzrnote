@@ -54,6 +54,7 @@ NOTE_ICON = "gtk-file"
 
 ATTICDIR="attic"
 SWPDIR="cache"
+CACHE_NOTETITLES="notetitles"
 VIMNOTERC=r"""
 " NOTE: This file is overwritten regularly.
 so ./notemode.vim
@@ -852,12 +853,12 @@ class MainInstance (ExportedGObject):
 		if filepath in self.open_files:
 			title = self.get_window_title_for_note_title(new_title)
 			self.open_files[filepath].set_title(title)
-		## write out all titles
+		## write out all titles to a cache file
 		cache = get_cache_dir()
-		with open(os.path.join(cache, "filenames"), "wb") as fobj:
+		with open(os.path.join(cache, CACHE_NOTETITLES), "wb") as fobj:
 			for filepath in self.get_note_filenames(False):
-				title = self.ensure_note_title(filepath)
-				fobj.write("%s %s\n" % (filepath, title))
+				title = tolocaleencoding(self.ensure_note_title(filepath), errors=False)
+				fobj.write("%s\n" % (title, ))
 
 	def on_notes_monitor_changed(self, monitor, gfile1, gfile2, event, model):
 		if event in (gio.FILE_MONITOR_EVENT_CREATED, gio.FILE_MONITOR_EVENT_DELETED):

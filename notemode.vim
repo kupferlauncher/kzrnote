@@ -30,6 +30,12 @@ if !exists('g:vimnote_autosave')
     let g:vimnote_autosave = 1
 endif
 
+if $XDG_CACHE_HOME == ''
+    let $XDG_CACHE_HOME = expand("~/.cache")
+endif
+if $XDG_CONFIG_HOME == ''
+    let $XDG_CONFIG_HOME = expand("~/.config")
+endif
 
 if !exists('s:cache_mtime')
     let s:have_cached_names = 0
@@ -39,31 +45,14 @@ if !exists('s:cache_mtime')
     let s:cache_mtime = 0
 endif
 
-function! KaizerNotesGetFnames() " {{{3
-    " Get list with filenames of all existing notes.
-    " from the vimnote cache file
-    if !s:have_cached_names
-        let listing = readfile($HOME . "/.cache/vimnote/filenames")
-        for line in listing
-            " split each line by literal '.note '
-            let linesp = split(line, '\.note\ \zs')
-            " strip last space
-            call add(s:cached_fnames, strpart(linesp[0], 0, strlen(linesp[0])-1))
-        endfor
-        let s:have_cached_names = 1
-    endif
-    return copy(s:cached_fnames)
-endfunction
-
 function! KaizerNotesGetTitles() " {{{3
     " Get list with titles of all existing notes.
     " from the vimnote cache file
     if !s:have_cached_titles
-        let listing = readfile($HOME . "/.cache/vimnote/filenames")
+        "" each line of notetitles is a title
+        let listing = readfile($XDG_CACHE_HOME . "/vimnote/notetitles")
         for line in listing
-            " split each line by literal '.note '
-            let linesp = split(line, '\.note\ \zs')
-            call add(s:cached_titles, linesp[1])
+            call add(s:cached_titles, line)
         endfor
         let s:have_cached_titles = 1
     endif
@@ -155,13 +144,6 @@ au BufRead *.note setlocal autoread
 au InsertLeave,CursorHold,CursorHoldI *.note
     \ if g:vimnote_autosave == 1 | silent! update | endif
 augroup END
-
-if $XDG_CACHE_HOME == ''
-    let $XDG_CACHE_HOME = expand("~/.cache")
-endif
-if $XDG_CONFIG_HOME == ''
-    let $XDG_CONFIG_HOME = expand("~/.config")
-endif
 
 " enable persistent undo by default
 set undofile
