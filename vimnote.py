@@ -52,14 +52,14 @@ MAXTITLELEN=50
 DEFAULT_WIN_SIZE = (450, 450)
 NOTE_ICON = "gtk-file"
 
-ATTICDIR="attic"
-SWPDIR="cache"
+DATA_ATTIC="attic"
+CACHE_SWP="cache"
 CACHE_NOTETITLES="notetitles"
 VIMNOTERC=r"""
 " NOTE: This file is overwritten regularly.
 so ./notemode.vim
 """
-VIMNOTERC_FILE="%s.vim" % APPNAME
+CONFIG_VIMRC="%s.vim" % APPNAME
 VIM_EXTRA_FLAGS=[]
 
 
@@ -493,7 +493,7 @@ class MainInstance (ExportedGObject):
 		grep_cmd.extend(['-e', tolocaleencoding(query, errors=False)])
 		grep_cmd.extend(['-r', get_notesdir()])
 		grep_cmd.append('--include=*%s' % NOTE_SUFFIX)
-		grep_cmd.extend(['--exclude-dir=%s' % SWPDIR, '--exclude-dir=%s' % ATTICDIR])
+		grep_cmd.extend(['--exclude-dir=%s' % CACHE_SWP, '--exclude-dir=%s' % DATA_ATTIC])
 		log(grep_cmd)
 		cin, cout = os.popen2(grep_cmd)
 		cin.close()
@@ -820,7 +820,7 @@ class MainInstance (ExportedGObject):
 	def delete_note(self, filepath):
 		log("Moving ", filepath)
 		notes_dir = get_notesdir()
-		attic_dir = os.path.join(notes_dir, ATTICDIR)
+		attic_dir = os.path.join(notes_dir, DATA_ATTIC)
 		try:
 			os.makedirs(attic_dir)
 		except OSError:
@@ -1008,12 +1008,12 @@ class MainInstance (ExportedGObject):
 	def write_vimrc_file(self):
 		CONFIG = get_config_dir()
 		CACHE = get_cache_dir()
-		vimswpdir = os.path.join(CACHE, SWPDIR)
+		vimswpdir = os.path.join(CACHE, CACHE_SWP)
 		try:
 			os.makedirs(vimswpdir, 0o700)
 		except EnvironmentError:
 			pass
-		rpath = os.path.join(CONFIG, VIMNOTERC_FILE)
+		rpath = os.path.join(CONFIG, CONFIG_VIMRC)
 		with open(rpath, "wb") as runtimefobj:
 			## Write in the directories in VIMNOTERC
 			runtimefobj.write(VIMNOTERC)
