@@ -189,9 +189,6 @@ command! -bar DeleteNote call s:DeleteNote()
 
 let g:vimnote_loaded = 1
 
-" other options you maybe want to use
-" set guifont=Monospace\ 8
-
 " read the user's config file
 silent! so CONFIG/user.vim
 
