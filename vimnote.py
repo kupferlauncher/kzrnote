@@ -63,31 +63,27 @@ CONFIG_VIMRC="%s.vim" % APPNAME
 VIM_EXTRA_FLAGS=[]
 
 
-def ensure_notesdir():
+def ensuredir(dirpath):
+	"""
+	ensure @dirpath exists and return it again
+
+	raises OSError on other error than EEXIST
+	"""
 	try:
-		os.makedirs(get_notesdir(), 0o700)
+		os.makedirs(dirpath, 0o700)
 	except OSError as exc:
 		if not exc.errno == errno.EEXIST:
 			raise
+	return dirpath
 
 def get_notesdir():
-	return os.path.join(glib.get_user_data_dir(), APPNAME)
+	return os.path.abspath(os.path.join(glib.get_user_data_dir(), APPNAME))
 
 def get_config_dir():
-	configdir = os.path.join(glib.get_user_config_dir(), APPNAME)
-	try:
-		os.makedirs(configdir, 0o700)
-	except OSError:
-		pass
-	return configdir
+	return os.path.abspath(os.path.join(glib.get_user_config_dir(), APPNAME))
 
 def get_cache_dir():
-	cachedir = os.path.join(glib.get_user_cache_dir(), APPNAME)
-	try:
-		os.makedirs(cachedir, 0o700)
-	except OSError:
-		pass
-	return cachedir
+	return os.path.abspath(os.path.join(glib.get_user_cache_dir(), APPNAME))
 
 ## make uris just  like gnote
 ## template  note://vimnote/1823-aa8s9df-1231290
@@ -854,7 +850,7 @@ class MainInstance (ExportedGObject):
 			title = self.get_window_title_for_note_title(new_title)
 			self.open_files[filepath].set_title(title)
 		## write out all titles to a cache file
-		cache = get_cache_dir()
+		cache = ensuredir(get_cache_dir())
 		with open(os.path.join(cache, CACHE_NOTETITLES), "wb") as fobj:
 			for filepath in self.get_note_filenames(False):
 				title = tolocaleencoding(self.ensure_note_title(filepath), errors=False)
@@ -1006,8 +1002,8 @@ class MainInstance (ExportedGObject):
 		return False
 
 	def write_vimrc_file(self):
-		CONFIG = get_config_dir()
-		CACHE = get_cache_dir()
+		CONFIG = ensuredir(get_config_dir())
+		CACHE = ensuredir(get_cache_dir())
 		vimswpdir = os.path.join(CACHE, CACHE_SWP)
 		try:
 			os.makedirs(vimswpdir, 0o700)
@@ -1108,7 +1104,7 @@ def main(argv):
 	glib.idle_add(m.setup_basic)
 	glib.idle_add(m.setup_gui)
 	glib.idle_add(m.handle_commandline, uargv, "", desktop_startup_id)
-	ensure_notesdir()
+	ensuredir(get_notesdir())
 	try:
 		gtk.main()
 	finally:
