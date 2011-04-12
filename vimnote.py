@@ -76,7 +76,7 @@ endif
 
 " hide menubar and toolbar
 set guioptions-=m guioptions-=T
-set shortmess+=a
+set shortmess=atTIOsWA
 
 " autosave vigorously
 set updatetime=200
@@ -84,13 +84,9 @@ set updatetime=200
 augroup vimnote
 au!
 au BufRead *.note setlocal autoread
-au BufReadPre *.note set noshowcmd
-"au BufWinEnter *.note set showcmd
 au InsertLeave,CursorHold,CursorHoldI *.note
 	\ if g:vimnote_autosave == 1 | silent! update | endif
 augroup END
-
-set noshowcmd
 
 
 " enable persistent undo by default
@@ -180,7 +176,7 @@ function! s:CompleteNote(arglead, cmdline, cursorpos)
 endfunction
 
 so /home/ulrik/pt/proj/vimnote/notemode.vim
-au BufWinEnter *
+au BufWinEnter *.note
 	\ if g:vimnote_link_notes == 1 | call KaizerNotesHighlightTitles(0) | endif
 
 command! -bar -nargs=* -complete=customlist,s:CompleteNote
@@ -1168,7 +1164,7 @@ class MainInstance (ExportedGObject):
 
 		## Note: Filename requires escaping (but our defaults are safe ones)
 		preload_argv = [VIM, '-g', '-f', '--servername', preload_id,
-		                '--remote-send', '<ESC>:e %s<CR>' % filepath]
+		                '--remote-send', '<ESC>:e %s<CR><CR>' % filepath]
 
 		log("Using preloaded", preload_argv)
 		## watch this process
