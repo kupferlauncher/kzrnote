@@ -1,9 +1,9 @@
 [Desktop Entry]
 Version=1.0
-Name=Vimnote
+Name=kzrnote
 Comment=Take notes using Vim
-Icon=vimnote
-Exec=vimnote %U
+Icon=kzrnote
+Exec=kzrnote %U
 Type=Application
 Categories=Utility;
 StartupNotify=true

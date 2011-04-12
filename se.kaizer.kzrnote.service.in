@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=se.kaizer.kzrnote
+Exec=@BINDIR@/kzrnote

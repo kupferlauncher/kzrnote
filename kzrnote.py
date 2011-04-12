@@ -1,8 +1,8 @@
 # encoding: utf-8
 
-APPNAME = "vimnote"
+APPNAME = "kzrnote"
 VIM = 'vim'
-ICONNAME = 'vimnote'
+ICONNAME = 'kzrnote'
 VERSION='0.1'
 
 import errno
@@ -55,7 +55,7 @@ NOTE_ICON = "gtk-file"
 DATA_ATTIC="attic"
 CACHE_SWP="cache"
 CACHE_NOTETITLES="notetitles"
-VIMNOTERC=r"""
+CONFIG_RCTEXT=r"""
 " NOTE: This file is overwritten regularly.
 so ./notemode.vim
 """
@@ -86,10 +86,10 @@ def get_cache_dir():
 	return os.path.abspath(os.path.join(glib.get_user_cache_dir(), APPNAME))
 
 ## make uris just  like gnote
-## template  note://vimnote/1823-aa8s9df-1231290
+## template  note://kzrnote/1823-aa8s9df-1231290
 
 URL_SCHEME = "note"
-URL_NETLOC = "vimnote"
+URL_NETLOC = APPNAME
 NOTE_SUFFIX = ".note"
 ## All uuids we use are this length (characters)
 FILENAME_LEN = 36 + len(NOTE_SUFFIX)
@@ -399,7 +399,7 @@ class MainInstance (ExportedGObject):
 
 	@dbus.service.method(interface_name)
 	def DisplaySearch(self):
-		return self.VimnoteCommandline([], '', '')
+		return self.KzrnoteCommandline([], '', '')
 
 	@dbus.service.method(interface_name, in_signature="s", out_signature="s")
 	def FindNote(self, linked_title):
@@ -528,15 +528,15 @@ class MainInstance (ExportedGObject):
 	def Version(self):
 		return "%s %s" % (APPNAME, VERSION)
 
-	## Vimnote-specific D-Bus methods
+	## Kzrnote-specific D-Bus methods
 	@dbus.service.method(interface_name, in_signature="asss", out_signature="s")
-	def VimnoteCommandline(self, uargv, display, desktop_startup_id):
+	def KzrnoteCommandline(self, uargv, display, desktop_startup_id):
 		return self.handle_commandline(uargv, display, desktop_startup_id)
 
-	## Vimnote-specific D-Bus methods
+	## Kzrnote-specific D-Bus methods
 	@dbus.service.method(interface_name, in_signature="sss", out_signature="b")
-	def VimnoteCommand(self, commandname, argument, sfilename):
-		log("VimnoteCommand: %s, %s, %s" % (commandname, argument, sfilename))
+	def KzrnoteCommand(self, commandname, argument, sfilename):
+		log("KzrnoteCommand: %s, %s, %s" % (commandname, argument, sfilename))
 		if not is_note(sfilename):
 			raise ValueError("'%s' is not a valid sender note" % sfilename)
 		if commandname == 'New':
@@ -1011,8 +1011,7 @@ class MainInstance (ExportedGObject):
 			pass
 		rpath = os.path.join(CONFIG, CONFIG_VIMRC)
 		with open(rpath, "wb") as runtimefobj:
-			## Write in the directories in VIMNOTERC
-			runtimefobj.write(VIMNOTERC)
+			runtimefobj.write(CONFIG_RCTEXT)
 		return rpath
 
 	def new_vimdow_preloaded(self, name, filepath):
@@ -1070,10 +1069,9 @@ def service_send_commandline(uargv, display, desktop_startup_id):
 	proxy_obj = bus.get_object(server_name, object_name)
 	iface = dbus.Interface(proxy_obj, interface_name)
 	try:
-		iface.VimnoteCommandline(uargv, display, desktop_startup_id)
+		iface.KzrnoteCommandline(uargv, display, desktop_startup_id)
 	except dbus.DBusException as exc:
 		error(exc)
-	#iface.VimnoteCommandline(uargv,"", "", error_handler=_dummy, reply_handler=_dummy)
 
 def setup_locale():
 	try:

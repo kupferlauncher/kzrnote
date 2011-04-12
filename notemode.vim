@@ -13,21 +13,21 @@
 " syntax colors
 "
 "
-" This file loads ~/.config/vimnote/user.vim which
+" This file loads ~/.config/kzrnote/user.vim which
 " should be used for user customization.
 
 
 " Don't source this when its already been loaded or &compatible is set.
-if &cp || exists('g:loaded_vimnote')
+if &cp || exists('g:loaded_kzrnote')
     finish
 endif
 
-if !exists('g:vimnote_link_notes')
-    let g:vimnote_link_notes = 1
+if !exists('g:kzrnote_link_notes')
+    let g:kzrnote_link_notes = 1
 endif
 
-if !exists('g:vimnote_autosave')
-    let g:vimnote_autosave = 1
+if !exists('g:kzrnote_autosave')
+    let g:kzrnote_autosave = 1
 endif
 
 if $XDG_CACHE_HOME == ''
@@ -47,10 +47,10 @@ endif
 
 function! KaizerNotesGetTitles() " {{{3
     " Get list with titles of all existing notes.
-    " from the vimnote cache file
+    " from the kzrnote cache file
     if !s:have_cached_titles
         "" each line of notetitles is a title
-        let listing = readfile($XDG_CACHE_HOME . "/vimnote/notetitles")
+        let listing = readfile($XDG_CACHE_HOME . "/kzrnote/notetitles")
         for line in listing
             call add(s:cached_titles, line)
         endfor
@@ -129,7 +129,7 @@ function! s:CompleteNote(arglead, cmdline, cursorpos)
 endfunction
 
 
-" settings that we need inside vimnote
+" settings that we need inside kzrnote
 
 " hide menubar and toolbar
 set guioptions-=m guioptions-=T
@@ -138,19 +138,19 @@ set shortmess=atTIOsWA
 " autosave vigorously
 set updatetime=200
 
-augroup vimnote
+augroup kzrnote
 au!
 au BufRead *.note setlocal autoread
 au InsertLeave,CursorHold,CursorHoldI *.note
-    \ if g:vimnote_autosave == 1 | silent! update | endif
+    \ if g:kzrnote_autosave == 1 | silent! update | endif
 augroup END
 
 " enable persistent undo by default
 set undofile
-set undodir=$XDG_CACHE_HOME/vimnote/cache
+set undodir=$XDG_CACHE_HOME/kzrnote/cache
 
-set directory=$XDG_CACHE_HOME/vimnote/cache
-set backupdir=$XDG_CACHE_HOME/vimnote/cache
+set directory=$XDG_CACHE_HOME/kzrnote/cache
+set backupdir=$XDG_CACHE_HOME/kzrnote/cache
 
 " set text editing options
 " use wrapmargin to adjust to window size
@@ -158,33 +158,33 @@ set wm=1
 set linebreak
 
 
-let s:vimnote_service = 'se.kaizer.vimnote'
-let s:vimnote_object = '/se/kaizer/vimnote'
-let s:vimnote_interface = 'se.kaizer.vimnote'
+let s:kzrnote_service = 'se.kaizer.kzrnote'
+let s:kzrnote_object = '/se/kaizer/kzrnote'
+let s:kzrnote_interface = 'se.kaizer.kzrnote'
 
-function! VimnoteCommand (cmd, arg, sender)
+function! KzrnoteCommand (cmd, arg, sender)
     silent exe '!dbus-send' '--type=method_call' '--print-reply'
-     \ '--dest=' .    s:vimnote_service s:vimnote_object
-     \ s:vimnote_interface . '.VimnoteCommand'
+     \ '--dest=' .    s:kzrnote_service s:kzrnote_object
+     \ s:kzrnote_interface . '.KzrnoteCommand'
      \ 'string:' . a:cmd 'string:' . a:arg 'string:' . a:sender
 endfunction
 
 function! s:DeleteNote()
-    call VimnoteCommand('Delete', '', expand("%:p"))
+    call KzrnoteCommand('Delete', '', expand("%:p"))
 endfunction
 
 function! s:NewNote(notename)
     " empty shellescaped string
     if a:notename != "''"
-        call VimnoteCommand('Open', a:notename, expand("%:p"))
+        call KzrnoteCommand('Open', a:notename, expand("%:p"))
     else
-        call VimnoteCommand('New', '', expand("%:p"))
+        call KzrnoteCommand('New', '', expand("%:p"))
     endif
 endfunction
 
 " hijack gf to open other notes
 
-function! VimnoteOpenLink(nname)
+function! KzrnoteOpenLink(nname)
     if a:nname != ''
         let escname = escape(a:nname, '!')
         let name = shellescape(escname)
@@ -195,24 +195,24 @@ function! VimnoteOpenLink(nname)
 endfunction
 
 
-noremap gf :call VimnoteOpenLink(CurSyntaxText("kaizerNoteTitle"))<CR><CR>
+noremap gf :call KzrnoteOpenLink(CurSyntaxText("kaizerNoteTitle"))<CR><CR>
 
-augroup vimnote
+augroup kzrnote
 au BufWinEnter *.note
-    \ if g:vimnote_link_notes == 1 | call KaizerNotesHighlightTitles(0) | endif
+    \ if g:kzrnote_link_notes == 1 | call KaizerNotesHighlightTitles(0) | endif
 au Syntax *
-    \ if g:vimnote_link_notes == 1 | call KaizerNotesHighlightTitles(1) | endif
+    \ if g:kzrnote_link_notes == 1 | call KaizerNotesHighlightTitles(1) | endif
 augroup END
 
 command! -bar -nargs=* -complete=customlist,s:CompleteNote
                  \ Note call s:NewNote(shellescape(<q-args>))
 command! -bar DeleteNote call s:DeleteNote()
 
-let g:loaded_vimnote = 1
+let g:loaded_kzrnote = 1
 
 
 " read the user's config file
-silent! so $XDG_CONFIG_HOME/vimnote/user.vim
+silent! so $XDG_CONFIG_HOME/kzrnote/user.vim
 
 " vim: sts=4 sw=4 et
 

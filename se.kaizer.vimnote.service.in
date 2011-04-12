@@ -1,3 +1,0 @@
-[D-BUS Service]
-Name=se.kaizer.vimnote
-Exec=@BINDIR@/vimnote
