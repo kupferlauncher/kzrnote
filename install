@@ -45,8 +45,7 @@ $INSTALL -v -m 644 -D kzrnote.desktop "$DAPPDIR/kzrnote.desktop"
 
 ## kzrnote.svg
 DICONDIR=$DESTDIR$DATADIR/icons/hicolor
-DICONDEST=$DICONDIR/scalable/apps
-$INSTALL -v -m 644 -D kzrnote.svg "$DICONDEST/scalable/apps/kzrnote.svg"
+$INSTALL -v -m 644 -D kzrnote.svg "$DICONDIR/scalable/apps/kzrnote.svg"
 trap "gtk-update-icon-cache -q -f -t $DICONDIR" EXIT
 
 type rsvg-convert >/dev/null || { echo "Skipping png icons, no rsvg-convert"; exit 0; }
