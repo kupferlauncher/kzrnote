@@ -63,6 +63,67 @@ so ./notemode.vim
 CONFIG_VIMRC="%s.vim" % APPNAME
 VIM_EXTRA_FLAGS=[]
 
+DATA_WELCOME_NOTE=u"""\
+Welcome to kzrnote
+..................
+
+As of this writing, no special syntax file
+exists for kzrnote, so you're free to use any
+mode you would like for each note.
+
+Each note remembers its size and position.
+
+Links are created to other notes if their
+title is mentioned, and can be opened with
+`gf`
+
+→ Configuring kzrnote
+
+kzrnote has a D-Bus API that allows application
+integration as well as full-text search.
+
+There are two commands available
+
+ :Note        create a new note, or with an
+              argument, open an existing note.
+ :DeleteNote  delete the current note
+"""
+
+DATA_ABOUT_NOTE=u"""\
+Configuring kzrnote
+...................
+
+You can set kzrnote-specific settings in the
+file ~/.config/kzrnote/user.vim
+
+You can set::
+
+    let g:kzrnote_link_notes = 0
+
+to disable linking.
+
+The default configuration is set up to
+vigorously autosave all open notes. Persistent
+undo is also enabled.
+
+Deleted notes are moved to
+~/.local/share/kzrnote/attic
+
+You can set::
+
+    let g:kzrnote_autosave = 0
+
+to disable autosaving
+
+kzrnote works best with Vim 7.3. The minimal
+configuration to make sure links are highlighted and
+that the `:Note` command works is something like the
+following::
+
+    set nocompatible
+    syntax on
+"""
+
 
 def ensuredir(dirpath):
     """
@@ -743,6 +804,20 @@ class MainInstance (ExportedGObject):
         if self.monitor:
             self.monitor.connect("changed", self.on_notes_monitor_changed, self.list_store)
         self.preload()
+        self.do_first_run()
+
+    def do_first_run(self):
+        """
+        If there are no notes, create them
+        and display the welcome note
+        """
+        if next(iter(get_note_paths()), None) is not None:
+            return
+        welcome_file = get_new_note_name()
+        about_file = get_new_note_name()
+        touch_filename(welcome_file, tonoteencoding(DATA_WELCOME_NOTE, False))
+        touch_filename(about_file, tonoteencoding(DATA_ABOUT_NOTE, False))
+        self.display_note_by_file(welcome_file)
 
     def on_list_view_row_activate(self, treeview, path, view_column):
         store = treeview.get_model()
