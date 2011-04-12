@@ -54,7 +54,6 @@ NOTE_ICON = "gtk-file"
 
 ATTICDIR="attic"
 SWPDIR="cache"
-## set wm=2  wrapmargin för automatisk wrapping till fönsterstorlek
 ## CACHE, CONFIG etc is replaced by the user directories
 VIMNOTERC=r"""
 " NOTE: This file is overwritten regularly.
@@ -67,22 +66,32 @@ if &cp || exists('g:vimnote_loaded')
   finish
 endif
 
-let g:vimnote_loaded = 1
+if !exists('g:vimnote_link_notes')
+	let g:vimnote_link_notes = 1
+endif
+
+if !exists('g:vimnote_autosave')
+	let g:vimnote_autosave = 1
+endif
 
 " hide menubar and toolbar
 set guioptions-=m guioptions-=T
 set shortmess+=a
 
-" autosave quickly
-augroup vimnote
-au InsertLeave,CursorHold,CursorHoldI *.note silent! update
-au BufRead *.note setlocal autoread
+" autosave vigorously
+set updatetime=200
 
+augroup vimnote
+au!
+au BufRead *.note setlocal autoread
 au BufReadPre *.note set noshowcmd
-au BufWinEnter *.note set showcmd
+"au BufWinEnter *.note set showcmd
+au InsertLeave,CursorHold,CursorHoldI *.note
+	\ if g:vimnote_autosave == 1 | silent! update | endif
 augroup END
 
-set updatetime=200
+set noshowcmd
+
 
 " enable persistent undo by default
 set undofile
@@ -171,17 +180,21 @@ function! s:CompleteNote(arglead, cmdline, cursorpos)
 endfunction
 
 so /home/ulrik/pt/proj/vimnote/notemode.vim
-au BufWinEnter * call KaizerNotesHighlightTitles(0)
+au BufWinEnter *
+	\ if g:vimnote_link_notes == 1 | call KaizerNotesHighlightTitles(0) | endif
 
 command! -bar -nargs=* -complete=customlist,s:CompleteNote
          \ Note call s:NewNote(shellescape(<q-args>))
 command! -bar DeleteNote call s:DeleteNote()
+
+let g:vimnote_loaded = 1
 
 " other options you maybe want to use
 " set guifont=Monospace\ 8
 
 " read the user's config file
 silent! so CONFIG/user.vim
+
 """
 VIMNOTERC_FILE="%s.vim" % APPNAME
 VIM_EXTRA_FLAGS=[]
