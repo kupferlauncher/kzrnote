@@ -54,7 +54,6 @@ NOTE_ICON = "gtk-file"
 
 ATTICDIR="attic"
 SWPDIR="cache"
-## CACHE, CONFIG etc is replaced by the user directories
 VIMNOTERC=r"""
 " NOTE: This file is overwritten regularly.
 so ./notemode.vim
@@ -63,8 +62,6 @@ VIMNOTERC_FILE="%s.vim" % APPNAME
 VIM_EXTRA_FLAGS=[]
 
 
-#:set guioptions=-T
-#:set shortmess+=T
 def ensure_notesdir():
 	try:
 		os.makedirs(get_notesdir(), 0o700)
@@ -1018,8 +1015,7 @@ class MainInstance (ExportedGObject):
 		rpath = os.path.join(CONFIG, VIMNOTERC_FILE)
 		with open(rpath, "wb") as runtimefobj:
 			## Write in the directories in VIMNOTERC
-			runtimefobj.write(
-				VIMNOTERC.replace('CONFIG', CONFIG).replace('CACHE', CACHE))
+			runtimefobj.write(VIMNOTERC)
 		return rpath
 
 	def new_vimdow_preloaded(self, name, filepath):
