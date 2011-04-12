@@ -120,7 +120,61 @@ function! s:NewNote(notename)
 	endif
 endfunction
 
-command! -bar -nargs=? Note call s:NewNote(shellescape(<q-args>))
+" hijack gf to open other notes
+
+function! VimnoteOpenLink(nname)
+	if a:nname != ''
+		let escname = escape(a:nname, '!')
+		let name = shellescape(escname)
+		call s:NewNote(name)
+	else
+		normal! gf <cfile>
+	endif
+endfunction
+
+function! CurSyntaxText(synname)
+	"" returns (on the current line)
+	"" the text of the syntax item @synname or ''
+	let curlinen = line(".")
+	let curcoln = col(".")
+	if a:synname != synIDattr(synID(curlinen, curcoln, 1), "name")
+		return ''
+	endif
+	let synid = synID(curlinen, curcoln, 1)
+
+	"" find beginning
+	let coln = curcoln
+	while coln > 0 && synID(curlinen, coln-1, 1) == synid
+		let coln = coln - 1
+	endwhile
+	"" find end
+	let endcoln = curcoln
+	while endcoln < col("$") && synID(curlinen, endcoln+1, 1) == synid
+		let endcoln = endcoln + 1
+	endwhile
+	" strpart (str, start, len)
+	return strpart(getline("."), coln-1, endcoln-coln + 1)
+endfunction
+
+noremap gf :call VimnoteOpenLink(CurSyntaxText("kaizerNoteTitle"))<CR><CR>
+
+function! s:CompleteNote(arglead, cmdline, cursorpos) 
+	" a:arglead is the current word and
+	" a:cmdline is the whole thing starting with Note
+	" we complete on the whole thing
+	" and then we must return matches without the first words,
+	" since vim believes it is inserting the next word, after the whitespace
+	let allargs = substitute(a:cmdline, "Note \s*", "", "")
+	let firstparts = strpart(allargs, 0, strlen(allargs) - strlen(a:arglead))
+	let matchtitles = filter(KaizerNotesGetTitles(), 'v:val =~? allargs')
+	return map(matchtitles, 'substitute(v:val, firstparts, "", "i")')
+endfunction
+
+so /home/ulrik/pt/proj/vimnote/notemode.vim
+au BufWinEnter * call KaizerNotesHighlightTitles(0)
+
+command! -bar -nargs=* -complete=customlist,s:CompleteNote
+         \ Note call s:NewNote(shellescape(<q-args>))
 command! -bar DeleteNote call s:DeleteNote()
 
 " other options you maybe want to use
@@ -683,7 +737,7 @@ class MainInstance (ExportedGObject):
 			del model[rowidx]
 			self.emit("note-deleted", filename, False)
 		else:
-			assert False, "unreachable"
+			log("File modifed does not exist: %r" % filename)
 
 
 	def get_note_change_date(self, filename):
@@ -925,6 +979,12 @@ class MainInstance (ExportedGObject):
 		if filepath in self.open_files:
 			title = self.get_window_title_for_note_title(new_title)
 			self.open_files[filepath].set_title(title)
+		## write out all titles
+		cache = get_cache_dir()
+		with open(os.path.join(cache, "filenames"), "wb") as fobj:
+			for filepath in self.get_note_filenames(False):
+				title = self.ensure_note_title(filepath)
+				fobj.write("%s %s\n" % (filepath, title))
 
 	def on_notes_monitor_changed(self, monitor, gfile1, gfile2, event, model):
 		if event in (gio.FILE_MONITOR_EVENT_CREATED, gio.FILE_MONITOR_EVENT_DELETED):
