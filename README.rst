@@ -58,4 +58,9 @@ if they need to be set to non-default values.
 * The project was renamed from the initial days' "vimnote" because that name
   was far too generic.
 
+**Screenshot**
+
+.. image:: http://kaizer.se/wiki/code/kzrnote/kzrnote-screenshot-1.png
+   :alt: kzrnote default welcome note and configuration note
+
 .. vim: ft=rst tw=76 sts=4
