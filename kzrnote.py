@@ -813,7 +813,6 @@ class MainInstance (ExportedGObject):
         self.window.add(vbox)
         # focus the list so that the user can search immediately
         self.list_view.grab_focus()
-        self.window.present()
         self.window.connect("delete-event", self.window.hide_on_delete)
         status_icon.connect("activate", self.on_status_icon_clicked)
         status_icon.connect("popup-menu", self.on_status_icon_menu)
