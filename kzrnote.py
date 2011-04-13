@@ -1080,13 +1080,9 @@ class MainInstance (ExportedGObject):
         return False
 
     def write_vimrc_file(self):
+        ## make sure the swp/backup dir exists at this point
+        ensuredir(os.path.join(get_cache_dir(), CACHE_SWP))
         CONFIG = ensuredir(get_config_dir())
-        CACHE = ensuredir(get_cache_dir())
-        vimswpdir = os.path.join(CACHE, CACHE_SWP)
-        try:
-            os.makedirs(vimswpdir, 0o700)
-        except EnvironmentError:
-            pass
         rpath = os.path.join(CONFIG, CONFIG_VIMRC)
         with open(rpath, "wb") as runtimefobj:
             runtimefobj.write(CONFIG_RCTEXT)
