@@ -1139,6 +1139,7 @@ class MainInstance (ExportedGObject):
         window.destroy()
 
 def service_send_commandline(uargv, display, desktop_startup_id):
+    "return an exit code (0 for success)"
     bus = dbus.Bus()
     proxy_obj = bus.get_object(server_name, object_name)
     iface = dbus.Interface(proxy_obj, interface_name)
@@ -1146,6 +1147,8 @@ def service_send_commandline(uargv, display, desktop_startup_id):
         iface.KzrnoteCommandline(uargv, display, desktop_startup_id)
     except dbus.DBusException as exc:
         error(exc)
+        return 1
+    return 0
 
 def setup_locale():
     try:
@@ -1168,8 +1171,7 @@ def main(argv):
     except NameError as exc:
         log(exc)
         log("An instance already running, passing on commandline...")
-        service_send_commandline(uargv, "", desktop_startup_id)
-        return 0
+        return service_send_commandline(uargv, "", desktop_startup_id)
     lazy_import("uuid")
     lazy_import("gtk")
     lazy_import("gio")
