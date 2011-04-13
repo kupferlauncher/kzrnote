@@ -293,6 +293,8 @@ def try_register_pr_pdeathsig():
     """
     PR_SET_PDEATHSIG=1
     SIGHUP=1
+    if sys.platform != 'linux2':
+        return
     try:
         import ctypes
     except ImportError:
