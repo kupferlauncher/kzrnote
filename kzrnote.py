@@ -151,14 +151,18 @@ def ensuredir(dirpath):
             raise
     return dirpath
 
+def get_xdg_dir(xdg_var, fallback):
+    xdg_dir = os.getenv(xdg_var) or os.path.expanduser(fallback)
+    return os.path.abspath(os.path.join(xdg_dir, APPNAME))
+
 def get_notesdir():
-    return os.path.abspath(os.path.join(glib.get_user_data_dir(), APPNAME))
+    return get_xdg_dir("XDG_DATA_HOME", "~/.local/share")
 
 def get_config_dir():
-    return os.path.abspath(os.path.join(glib.get_user_config_dir(), APPNAME))
+    return get_xdg_dir("XDG_CONFIG_HOME", "~/.config")
 
 def get_cache_dir():
-    return os.path.abspath(os.path.join(glib.get_user_cache_dir(), APPNAME))
+    return get_xdg_dir("XDG_CACHE_HOME", "~/.cache")
 
 ## make uris just  like gnote
 ## template  note://kzrnote/1823-aa8s9df-1231290
