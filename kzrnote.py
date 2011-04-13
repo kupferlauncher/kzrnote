@@ -134,7 +134,7 @@ def ensuredir(dirpath):
     try:
         os.makedirs(dirpath, 0o700)
     except OSError as exc:
-        if not exc.errno == errno.EEXIST:
+        if exc.errno != errno.EEXIST:
             raise
     return dirpath
 
