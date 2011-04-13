@@ -60,6 +60,7 @@ CONFIG_RCTEXT=r"""
 " NOTE: This file is overwritten regularly.
 so ./notemode.vim
 """
+CONFIG_USERRC="user.vim"
 CONFIG_VIMRC="%s.vim" % APPNAME
 VIM_EXTRA_FLAGS=[]
 
@@ -124,6 +125,18 @@ following::
     syntax on
 """
 
+def ensurefile(filename, default_content=None):
+    """
+    ensure @filename exists:
+    it is touched if it does not exist.
+    directories in the path are NOT created.
+
+    @default_content: bytestring, if not None, to
+        write into the file by default.
+    """
+    if not os.path.exists(filename):
+        touch_filename(filename, lcontent=default_content)
+    return filename
 
 def ensuredir(dirpath):
     """
@@ -1083,6 +1096,9 @@ class MainInstance (ExportedGObject):
         ## make sure the swp/backup dir exists at this point
         ensuredir(os.path.join(get_cache_dir(), CACHE_SWP))
         CONFIG = ensuredir(get_config_dir())
+        ## touch the user config file
+        ensurefile(os.path.join(CONFIG, CONFIG_USERRC))
+        ## write the kzrnote .vim file
         rpath = os.path.join(CONFIG, CONFIG_VIMRC)
         with open(rpath, "wb") as runtimefobj:
             runtimefobj.write(CONFIG_RCTEXT)
