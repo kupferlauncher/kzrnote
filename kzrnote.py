@@ -755,11 +755,13 @@ class MainInstance (ExportedGObject):
         self.ready_to_display_notes = True
 
     def setup_gui(self):
+        # notification icon
         status_icon = gtk.status_icon_new_from_icon_name(ICONNAME)
         status_icon.set_tooltip_text(APPNAME)
         status_icon.set_visible(True)
         self.status_icon = status_icon
 
+        # main window with its toolbar and note list
         gtk.window_set_default_icon_name(ICONNAME)
         self.window = gtk.Window()
         self.window.set_default_size(300, 400)
@@ -809,6 +811,8 @@ class MainInstance (ExportedGObject):
         vbox.pack_start(scrollwin, True, True, 0)
         vbox.show()
         self.window.add(vbox)
+        # focus the list so that the user can search immediately
+        self.list_view.grab_focus()
         self.window.present()
         self.window.connect("delete-event", self.window.hide_on_delete)
         status_icon.connect("activate", self.on_status_icon_clicked)
