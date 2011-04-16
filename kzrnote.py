@@ -52,6 +52,7 @@ NEW_NOTE_TEMPLATE=u"Note %s"
 MAXTITLELEN=50
 DEFAULT_WIN_SIZE = (450, 450)
 NOTE_ICON = "gtk-file"
+N_RECENT_MENU = 15
 
 DATA_ATTIC="attic"
 CACHE_SWP="cache"
@@ -858,8 +859,6 @@ class MainInstance (ExportedGObject):
         widget.emit("popup-menu", 1, gtk.get_current_event_time())
 
     def on_status_icon_menu(self, widget, button, activate_time):
-        show_num_recent = 15
-
         def present_window(sender):
             self.window.present()
 
@@ -889,7 +888,7 @@ class MainInstance (ExportedGObject):
                 ## insert the recent notes
                 menu.append(gtk.SeparatorMenuItem())
                 notes_sorted = list(self.get_note_filenames(True))
-                for filename in notes_sorted[:show_num_recent]:
+                for filename in notes_sorted[:N_RECENT_MENU]:
                     display_name = self.ensure_note_title(filename)
                     mitem = gtk.ImageMenuItem(NOTE_ICON)
                     mitem.set_label(display_name)
