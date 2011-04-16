@@ -292,21 +292,20 @@ def touch_filename(filename, lcontent=None):
             written += os.write(fd, lcontent[written:])
     os.close(fd)
 
-def overwrite_filename(filename, lcontent):
+def overwrite_by_rename(filename, lcontent):
     """
-    Overwrite @filename
+    Overwrite @filename by writing to a temporary file,
+    then renaming over the original file.
 
-    write the bytestring @lcontent into it
+    Write the bytestring @lcontent into it
     """
-    fd = os.open(filename, os.O_CREAT| os.O_TRUNC | os.O_WRONLY, 0o666)
-    written = 0
-    while written < len(lcontent):
-        written += os.write(fd, lcontent[written:])
-    os.close(fd)
+    tmp_filename = "%s.tmp_%d" % (filename, os.getpid())
+    touch_filename(tmp_filename, lcontent)
+    os.rename(tmp_filename, filename)
 
 def read_filename(filename):
     """
-    Read @filename which must exists
+    Read @filename which must exist
 
     return a byte string
     """
@@ -569,7 +568,7 @@ class MainInstance (ExportedGObject):
                 lcontents = tonoteencoding(contents)
             except UnicodeEncodeError:
                 return False
-            overwrite_filename(filename, lcontents)
+            overwrite_by_rename(filename, lcontents)
             self.emit("note-contents-changed", filename)
             return True
         else:
