@@ -50,7 +50,8 @@ def _(x):
 DEFAULT_NOTE_NAME =u"Empty Note"
 NEW_NOTE_TEMPLATE=u"Note %s"
 MAXTITLELEN=50
-DEFAULT_WIN_SIZE = (450, 450)
+WINDOW_SIZE_NOTE = (450, 450)
+WINDOW_SIZE_MAIN = (300, 400)
 NOTE_ICON = "gtk-file"
 N_RECENT_MENU = 15
 
@@ -772,7 +773,7 @@ class MainInstance (ExportedGObject):
         # main window with its toolbar and note list
         gtk.window_set_default_icon_name(ICONNAME)
         self.window = gtk.Window()
-        self.window.set_default_size(300, 400)
+        self.window.set_default_size(*WINDOW_SIZE_MAIN)
         self.list_view = gtk.TreeView()
         self.list_store = gtk.ListStore(gobject.TYPE_STRING,
                                         gobject.TYPE_STRING)
@@ -1079,7 +1080,7 @@ class MainInstance (ExportedGObject):
         Return (window, preload_id)
         """
         window = gtk.Window()
-        window.set_default_size(*DEFAULT_WIN_SIZE)
+        window.set_default_size(*WINDOW_SIZE_NOTE)
         server_id = self.generate_vim_server_id()
 
         socket = gtk.Socket()
