@@ -971,17 +971,7 @@ class MainInstance (ExportedGObject):
         window.connect("configure-event",
                        self.metadata_service.update_window_geometry,
                        filepath)
-        glib.timeout_add_seconds(1, self.nudge_window, window)
-
-    def nudge_window(self, window):
-        ## disabled for now
-        return
-        ## Nudge window so that the child's size is reallocated
-        sz = tuple(window.get_size())
-        log("nudge", window.get_title(), sz)
-        bw = window.get_border_width()
-        window.set_border_width(bw+1)
-        glib.timeout_add(100,window.set_border_width, bw)
+        # TODO: Support notes changing font size (and thus size)?
 
     def position_window(self, window, filepath):
         """
