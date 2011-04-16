@@ -162,28 +162,27 @@ let s:kzrnote_service = 'se.kaizer.kzrnote'
 let s:kzrnote_object = '/se/kaizer/kzrnote'
 let s:kzrnote_interface = 'se.kaizer.kzrnote'
 
-function! KzrnoteCommand (cmd, arg, sender)
+function! KzrnoteMethod (method, arg, sender)
     silent exe '!dbus-send' '--type=method_call' '--print-reply'
-     \ '--dest=' .    s:kzrnote_service s:kzrnote_object
-     \ s:kzrnote_interface . '.KzrnoteCommand'
-     \ 'string:' . a:cmd 'string:' . a:arg 'string:' . a:sender
+     \ '--dest=' . s:kzrnote_service s:kzrnote_object
+     \ s:kzrnote_interface . '.' . a:method
+     \ 'string:' . a:arg 'string:' . a:sender
 endfunction
 
 function! s:DeleteNote()
-    call KzrnoteCommand('Delete', '', expand("%:p"))
+    call KzrnoteMethod('KzrnoteDelete', '', expand("%:p"))
 endfunction
 
 function! s:NewNote(notename)
     " empty shellescaped string
     if a:notename != "''"
-        call KzrnoteCommand('Open', a:notename, expand("%:p"))
+        call KzrnoteMethod('KzrnoteOpen', a:notename, expand("%:p"))
     else
-        call KzrnoteCommand('New', '', expand("%:p"))
+        call KzrnoteMethod('KzrnoteNew', '', expand("%:p"))
     endif
 endfunction
 
 " hijack gf to open other notes
-
 function! KzrnoteOpenLink(nname)
     if a:nname != ''
         let escname = escape(a:nname, '!')
@@ -193,7 +192,6 @@ function! KzrnoteOpenLink(nname)
         normal! gf <cfile>
     endif
 endfunction
-
 
 noremap gf :call KzrnoteOpenLink(CurSyntaxText("kaizerNoteTitle"))<CR><CR>
 

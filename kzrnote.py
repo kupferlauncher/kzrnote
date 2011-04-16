@@ -239,6 +239,21 @@ def get_filename_for_note_uri(uri):
         raise ValueError("Invalid path in %s" % uri)
     return os.path.join(get_notesdir(), os.path.basename(parse.path)) + NOTE_SUFFIX
 
+def get_filename_for_note_basename(notename):
+    """
+    Leniently accept uuids and file basenames and convert into notes.
+
+    Raises ValueError if invalid name or does not exist.
+    """
+    if notename.endswith(NOTE_SUFFIX):
+        end = -len(NOTE_SUFFIX)
+    else:
+        end = None
+    filename = get_note(os.path.basename(notename)[:end])
+    if is_note(filename):
+        return filename
+    raise ValueError("No note found")
+
 def get_note_paths():
     D = get_notesdir()
     for x in os.listdir(D):
@@ -619,26 +634,38 @@ class MainInstance (ExportedGObject):
     def KzrnoteCommandline(self, uargv, display, desktop_startup_id):
         return self.handle_commandline(uargv, display, desktop_startup_id)
 
-    ## Kzrnote-specific D-Bus methods
-    @dbus.service.method(interface_name, in_signature="sss", out_signature="b")
-    def KzrnoteCommand(self, commandname, argument, sfilename):
-        log("KzrnoteCommand: %s, %s, %s" % (commandname, argument, sfilename))
-        if commandname == 'New':
-            self.create_open_note(None)
-            return True
-        if commandname == 'Delete':
-            if not is_note(sfilename):
-                raise ValueError("Cannot delete %r" % unicode(sfilename))
-            self.delete_note(sfilename)
-            return True
-        if commandname == 'Open':
-            log("Open: %s" % argument)
+    @dbus.service.method(interface_name, in_signature="ss", out_signature="b")
+    def KzrnoteNew(self, argument, sfilename):
+        log("KzrnoteNew: %s, %s" % (argument, sfilename))
+        self.create_open_note(None)
+        return True
+
+    @dbus.service.method(interface_name, in_signature="ss", out_signature="b")
+    def KzrnoteDelete(self, argument, sfilename):
+        log("KzrnoteDelete: %s, %s" % (argument, sfilename))
+        lfilename = tolocaleencoding(sfilename, False)
+        if not is_note(lfilename):
+            raise ValueError("Cannot delete %r" % lfilename)
+        self.delete_note(lfilename)
+        return True
+
+    @dbus.service.method(interface_name, in_signature="ss", out_signature="b")
+    def KzrnoteOpen(self, argument, sfilename):
+        log("KzrnoteOpen: %s, %s" % (argument, sfilename))
+        ## Open note either by note uuid or by title
+        try:
+            ## make sure the filename is a byte string
+            largument = tolocaleencoding(argument, False)
+            filename = get_filename_for_note_basename(largument)
+        except ValueError:
             filename = self.has_note_by_title(argument, False)
-            if filename and is_note(filename):
-                self.display_note_by_file(filename)
-                return True
-            return False
-        raise ValueError("'%s' is not a supported command" % commandname)
+        if filename and is_note(filename):
+            log("Open:", filename)
+            self.display_note_by_file(filename)
+            return True
+        log("Can not open:", largument)
+        return False
+
 
     @dbus.service.method(interface_name)
     def Quit(self):
