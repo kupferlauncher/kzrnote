@@ -339,15 +339,6 @@ def try_register_pr_pdeathsig():
     except (AttributeError, OSError):
         pass
 
-def get_relative_name(path, relativeto):
-    display_name_long = glib.filename_display_name(path)
-    rel_display = glib.filename_display_name(relativeto)
-    homedir = glib.filename_display_name(os.path.expanduser("~"))
-    if display_name_long.startswith(rel_display):
-        return display_name_long.replace(rel_display, '', 1).lstrip("/")
-    elif display_name_long.startswith(homedir):
-        return display_name_long.replace(homedir, "~", 1)
-    return display_name_long
 
 server_name = "se.kaizer.%s" % APPNAME
 interface_name = "se.kaizer.%s" % APPNAME
