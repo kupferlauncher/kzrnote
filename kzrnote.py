@@ -951,7 +951,8 @@ class MainInstance (ExportedGObject):
         cache = ensuredir(get_cache_dir())
         with open(os.path.join(cache, CACHE_NOTETITLES), "wb") as fobj:
             for filepath in self.get_note_filenames(False):
-                title = tolocaleencoding(self.ensure_note_title(filepath), errors=False)
+                title = tonoteencoding(self.ensure_note_title(filepath),
+                                       errors=False)
                 fobj.write("%s\n" % (title, ))
 
     def on_notes_monitor_changed(self, monitor, gfile1, gfile2, event, model):
