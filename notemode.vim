@@ -45,7 +45,7 @@ if !exists('s:cache_mtime')
     let s:cache_mtime = 0
 endif
 
-function! KaizerNotesGetTitles() " {{{3
+function! KaizerNotesGetTitles()
     " Get list with titles of all existing notes.
     " from the kzrnote cache file
     if !s:have_cached_titles
@@ -60,7 +60,7 @@ function! KaizerNotesGetTitles() " {{{3
 endfunction
 
 
-function! KaizerNotesHighlightTitles(force) " {{{3
+function! KaizerNotesHighlightTitles(force)
     " Highlight the names of all notes as "kaizerNoteTitle" (linked to "Underlined").
     highlight def link kaizerNoteTitle Underlined
     if a:force || !(exists('b:notes_names_last_highlighted') && b:notes_names_last_highlighted > s:cache_mtime)

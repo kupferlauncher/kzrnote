@@ -1,11 +1,12 @@
 # encoding: utf-8
-# vim: sts=4 sw=4 et ft=python
+# vim: sts=4 sw=4 et ft=python foldmethod=marker
 
 APPNAME = "kzrnote"
 VIM = 'vim'
 ICONNAME = 'kzrnote'
 VERSION='0.1'
 
+# Preamble {{{
 import errno
 import locale
 import os
@@ -47,6 +48,8 @@ def error(*args):
 def _(x):
     return x
 
+# }}}
+# Default configuration {{{
 DEFAULT_NOTE_NAME =u"Empty Note"
 NEW_NOTE_TEMPLATE=u"Note %s"
 MAXTITLELEN=50
@@ -127,6 +130,8 @@ following::
     syntax on
 """
 
+# }}}
+# Note Access {{{
 def ensurefile(filename, default_content=None):
     """
     ensure @filename exists:
@@ -339,12 +344,8 @@ def try_register_pr_pdeathsig():
     except (AttributeError, OSError):
         pass
 
-
-server_name = "se.kaizer.%s" % APPNAME
-interface_name = "se.kaizer.%s" % APPNAME
-object_name = "/se/kaizer/%s" % APPNAME
-
-class NoteMetadataService (object):
+# }}}
+class NoteMetadataService (object):  # {{{
     def __init__(self):
         self.storagefile = os.path.join(get_cache_dir(), "metadata")
         self.geometries = {}
@@ -394,6 +395,12 @@ class NoteMetadataService (object):
         """
         note_uri = get_note_uri(notefilename)
         return self.geometries.get(note_uri, None)
+
+# }}}
+# MainInstance {{{
+server_name = "se.kaizer.%s" % APPNAME
+interface_name = "se.kaizer.%s" % APPNAME
+object_name = "/se/kaizer/%s" % APPNAME
 
 class MainInstance (ExportedGObject):
     __gsignals__ = {
@@ -449,6 +456,8 @@ class MainInstance (ExportedGObject):
         while gtk.events_pending() and not self.ready_to_display_notes:
             gtk.main_iteration()
 
+    # }}}
+    # D-Bus Interface {{{
     @dbus.service.method(interface_name, in_signature="", out_signature="s")
     def CreateNote(self):
         new_note = get_new_note_name()
@@ -657,6 +666,8 @@ class MainInstance (ExportedGObject):
     def Quit(self):
         gtk.main_quit()
 
+    # }}}
+    # Note Model {{{
     def reload_filemodel(self, model):
         model.clear()
         for filename in self.get_note_filenames(True):
@@ -766,8 +777,8 @@ class MainInstance (ExportedGObject):
         except EnvironmentError:
             pass
         return DEFAULT_NOTE_NAME
-
-
+    # }}}
+    # GUI {{{
     def setup_basic(self):
         """
         Setup basic data needed for displaying notes
@@ -914,12 +925,6 @@ class MainInstance (ExportedGObject):
         menu.popup(None, None, gtk.status_icon_position_menu,
                    button, activate_time, widget)
 
-    def display_note_by_file(self, filename):
-        if filename in self.open_files:
-            self.open_files[filename].present()
-        else:
-            self.open_note_on_screen(filename)
-
     def on_delete_row_cliecked(self, toolitem, treeview):
         path, column = treeview.get_cursor()
         if path is None:
@@ -928,6 +933,13 @@ class MainInstance (ExportedGObject):
         titer = store.get_iter(path)
         (filepath, ) = store.get(titer, 0)
         self.delete_note(filepath)
+    # }}}
+    # Embedding VIM {{{
+    def display_note_by_file(self, filename):
+        if filename in self.open_files:
+            self.open_files[filename].present()
+        else:
+            self.open_note_on_screen(filename)
 
     def delete_note(self, filepath):
         log("Moving ", filepath)
@@ -1019,7 +1031,8 @@ class MainInstance (ExportedGObject):
         touch_filename(note_name, lcontent)
         return self.open_note_on_screen(note_name)
 
-    def handle_commandline(self, arguments, display, desktop_startup_id):
+    # }}}
+    def handle_commandline(self, arguments, display, desktop_startup_id): #{{{
         """
         When handling commandline:
 
@@ -1063,6 +1076,8 @@ class MainInstance (ExportedGObject):
         # stop the glib idle_add invocation
         return False
 
+    # }}}
+    # Embedding VIM {{{
     @classmethod
     def generate_vim_server_id(cls):
         return "__%s_%s_" % (APPNAME, time.time())
@@ -1183,6 +1198,8 @@ class MainInstance (ExportedGObject):
             log("Window closed but already unregistered: %d %d" % (pid, condition))
         window.destroy()
 
+# }}}
+# main {{{
 def service_send_commandline(uargv, display, desktop_startup_id):
     "return an exit code (0 for success)"
     bus = dbus.Bus()
@@ -1229,8 +1246,7 @@ def main(argv):
         m.unregister()
         m.close_all()
 
-
-
 if __name__ == '__main__':
     sys.exit(main(sys.argv))
 
+# }}}
