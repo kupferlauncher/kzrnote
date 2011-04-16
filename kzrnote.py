@@ -645,7 +645,6 @@ class MainInstance (ExportedGObject):
         gtk.main_quit()
 
     def reload_filemodel(self, model):
-        notes_dir = get_notesdir()
         model.clear()
         for filename in self.get_note_filenames(True):
             display_name = self.ensure_note_title(filename)
