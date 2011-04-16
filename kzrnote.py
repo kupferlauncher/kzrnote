@@ -618,12 +618,12 @@ class MainInstance (ExportedGObject):
     @dbus.service.method(interface_name, in_signature="sss", out_signature="b")
     def KzrnoteCommand(self, commandname, argument, sfilename):
         log("KzrnoteCommand: %s, %s, %s" % (commandname, argument, sfilename))
-        if not is_note(sfilename):
-            raise ValueError("'%s' is not a valid sender note" % sfilename)
         if commandname == 'New':
             self.create_open_note(None)
             return True
         if commandname == 'Delete':
+            if not is_note(sfilename):
+                raise ValueError("Cannot delete %r" % unicode(sfilename))
             self.delete_note(sfilename)
             return True
         if commandname == 'Open':
