@@ -270,7 +270,7 @@ def touch_filename(filename, lcontent=None):
 
     optionally write the bytestring @lcontent into it
     """
-    fd = os.open(filename, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0666)
+    fd = os.open(filename, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o666)
     if lcontent:
         written = 0
         while written < len(lcontent):
@@ -283,7 +283,7 @@ def overwrite_filename(filename, lcontent):
 
     write the bytestring @lcontent into it
     """
-    fd = os.open(filename, os.O_CREAT| os.O_TRUNC | os.O_WRONLY, 0666)
+    fd = os.open(filename, os.O_CREAT| os.O_TRUNC | os.O_WRONLY, 0o666)
     written = 0
     while written < len(lcontent):
         written += os.write(fd, lcontent[written:])
