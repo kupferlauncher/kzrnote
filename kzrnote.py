@@ -538,13 +538,11 @@ class MainInstance (ExportedGObject):
     def GetNoteContents(self, uri):
         """
         Raises ValueError on invalid @uri
+        Raises UnicodeDecodeError on coding error
         """
         filename = get_filename_for_note_uri(uri)
         if is_note(filename):
-            try:
-                return fromnoteencoding(read_filename(filename))
-            except UnicodeDecodeError:
-                return ""
+            return fromnoteencoding(read_filename(filename))
         else:
             return ""
 
@@ -552,13 +550,11 @@ class MainInstance (ExportedGObject):
     def SetNoteContents(self, uri, contents):
         """
         Raises ValueError on invalid @uri
+        Raises UnicodeEncodeError on coding error
         """
         filename = get_filename_for_note_uri(uri)
         if is_note(filename):
-            try:
-                lcontents = tonoteencoding(contents)
-            except UnicodeEncodeError:
-                return False
+            lcontents = tonoteencoding(contents)
             overwrite_by_rename(filename, lcontents)
             self.emit("note-contents-changed", filename)
             return True
