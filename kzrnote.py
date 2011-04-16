@@ -41,7 +41,7 @@ def log(*args):
     plainlog(*args)
 
 def error(*args):
-    sys.stderr.write("Error in %s: " % __name__)
+    sys.stderr.write("Error: ")
     plainlog(*args)
 
 def _(x):
@@ -1019,7 +1019,7 @@ class MainInstance (ExportedGObject):
         @display: the name of the X screen (not implemented)
         @desktop_startup_id: $DESKTOP_STARTUP_ID from invocation
 
-        returns: String output (Usage help if applicable)
+        returns: Error output (unicode) (Argument parsing messages)
         """
         log("handle commandline", arguments, display, desktop_startup_id)
 
@@ -1037,9 +1037,20 @@ class MainInstance (ExportedGObject):
                 self.window.present_with_time(timestamp)
             else:
                 self.window.present()
-        for noteuri in arguments:
-            self.DisplayNote(noteuri)
-        return ""
+        try:
+            for noteuri in arguments:
+                self.DisplayNote(noteuri)
+        except ValueError as exc:
+            return u"Argument %s: %s" % (noteuri, exc)
+        return u""
+
+    def handle_commandline_main(self, arguments, display, desktop_startup_id):
+        """handling commandline as main instance, will output errors"""
+        errmsg = self.handle_commandline(arguments, display, desktop_startup_id)
+        if errmsg:
+            error(errmsg)
+        # stop the glib idle_add invocation
+        return False
 
     @classmethod
     def generate_vim_server_id(cls):
@@ -1166,10 +1177,9 @@ def service_send_commandline(uargv, display, desktop_startup_id):
     bus = dbus.Bus()
     proxy_obj = bus.get_object(server_name, object_name)
     iface = dbus.Interface(proxy_obj, interface_name)
-    try:
-        iface.KzrnoteCommandline(uargv, display, desktop_startup_id)
-    except dbus.DBusException as exc:
-        error(exc)
+    errmsg = iface.KzrnoteCommandline(uargv, display, desktop_startup_id)
+    if errmsg:
+        error(errmsg)
         return 1
     return 0
 
@@ -1200,7 +1210,7 @@ def main(argv):
     lazy_import("gio")
     glib.idle_add(m.setup_basic)
     glib.idle_add(m.setup_gui)
-    glib.idle_add(m.handle_commandline, uargv, "", desktop_startup_id)
+    glib.idle_add(m.handle_commandline_main, uargv, "", desktop_startup_id)
     ensuredir(get_notesdir())
     try:
         gtk.main()
