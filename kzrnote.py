@@ -221,7 +221,8 @@ def note_uuid_from_filename(filename):
     raise ValueError
 
 def get_note_uri(filepath):
-    return "%s://%s/%s" % (URL_SCHEME, URL_NETLOC, note_uuid_from_filename(filepath))
+    return "%s://%s/%s" % (URL_SCHEME, URL_NETLOC,
+                           note_uuid_from_filename(filepath))
 
 def get_filename_for_note_uri(uri):
     """
@@ -559,7 +560,8 @@ class MainInstance (ExportedGObject):
 
     @dbus.service.method(interface_name, in_signature="ss", out_signature="b")
     def SetNoteContentsXml(self, uri, contents):
-        ## Easy choice: SetNoteContentsXml broken on Gnote. We can support SetNoteCompleteXml
+        # Easy choice: SetNoteContentsXml broken on Gnote. We can support
+        # SetNoteCompleteXml
         raise NotImplementedError
 
     @dbus.service.method(interface_name, in_signature="sb", out_signature="as")
@@ -570,7 +572,8 @@ class MainInstance (ExportedGObject):
         grep_cmd.extend(['-e', tolocaleencoding(query, errors=False)])
         grep_cmd.extend(['-r', get_notesdir()])
         grep_cmd.append('--include=*%s' % NOTE_SUFFIX)
-        grep_cmd.extend(['--exclude-dir=%s' % CACHE_SWP, '--exclude-dir=%s' % DATA_ATTIC])
+        grep_cmd.extend(['--exclude-dir=%s' % CACHE_SWP,
+                         '--exclude-dir=%s' % DATA_ATTIC])
         log(grep_cmd)
         cin, cout = os.popen2(grep_cmd)
         cin.close()
@@ -770,7 +773,8 @@ class MainInstance (ExportedGObject):
         self.window = gtk.Window()
         self.window.set_default_size(300, 400)
         self.list_view = gtk.TreeView()
-        self.list_store = gtk.ListStore(gobject.TYPE_STRING, gobject.TYPE_STRING)
+        self.list_store = gtk.ListStore(gobject.TYPE_STRING,
+                                        gobject.TYPE_STRING)
         self.list_view.set_model(self.list_store)
         cell = gtk.CellRendererText()
         filename_col = gtk.TreeViewColumn("Note", cell, text=1)
@@ -824,7 +828,9 @@ class MainInstance (ExportedGObject):
         gfile = gio.File(path=get_notesdir())
         self.monitor = gfile.monitor_directory()
         if self.monitor:
-            self.monitor.connect("changed", self.on_notes_monitor_changed, self.list_store)
+            self.monitor.connect("changed",
+                                 self.on_notes_monitor_changed,
+                                 self.list_store)
         self.preload()
         self.do_first_run()
 
@@ -956,7 +962,8 @@ class MainInstance (ExportedGObject):
                 fobj.write("%s\n" % (title, ))
 
     def on_notes_monitor_changed(self, monitor, gfile1, gfile2, event, model):
-        if event in (gio.FILE_MONITOR_EVENT_CREATED, gio.FILE_MONITOR_EVENT_DELETED):
+        if event in (gio.FILE_MONITOR_EVENT_CREATED,
+                     gio.FILE_MONITOR_EVENT_DELETED):
             self.model_reassess_file(model, gfile1.get_path(), addrm=True)
         if event in (gio.FILE_MONITOR_EVENT_CHANGES_DONE_HINT, ):
             self.model_reassess_file(model, gfile1.get_path(), change=True)
@@ -992,7 +999,8 @@ class MainInstance (ExportedGObject):
         title = u"%s: %s" % (progname, note_title)
         return title
 
-    def open_note_on_screen(self, filepath, title=None, screen=None, timestamp=None):
+    def open_note_on_screen(self, filepath, title=None, screen=None,
+                            timestamp=None):
         """
         Open @filepath that does not have a window open
         since before
@@ -1103,7 +1111,8 @@ class MainInstance (ExportedGObject):
         log("Plug connected to Socket")
         if is_preload:
             ## delay registration just a bit longer
-            glib.timeout_add(100, self.after_socket_plug_added, server_id, window)
+            glib.timeout_add(100, self.after_socket_plug_added,
+                             server_id, window)
 
     def after_socket_plug_added(self, server_id, window):
         log("Registering %r as ready" % server_id)
@@ -1136,9 +1145,8 @@ class MainInstance (ExportedGObject):
 
         log("Using preloaded", preload_argv)
         ## watch this process
-        pid, sin, sout, serr = \
-                glib.spawn_async(preload_argv,
-                                 flags=glib.SPAWN_SEARCH_PATH|glib.SPAWN_DO_NOT_REAP_CHILD)
+        pid, sin, sout, serr = glib.spawn_async(preload_argv,
+                      flags=glib.SPAWN_SEARCH_PATH|glib.SPAWN_DO_NOT_REAP_CHILD)
         glib.child_watch_add(pid, self.on_vim_remote_exit, preload_argv)
         self.position_window(window, filepath)
         window.present()
