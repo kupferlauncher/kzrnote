@@ -3,7 +3,7 @@ kzrnote
 =======
 
 :Licence:   GNU General Public License v3 (or any later version)
-:Credits:   Copyright 2011 kaizer.se
+:Credits:   Copyright 2011–2017
 
 kzrnote the beginnings of a clone of Gnote (a note taking application like
 Tomboy). Except, of course, in each small window there is all of Vim inside.
@@ -19,7 +19,6 @@ Invoke it using::
 It remembers the size and position of each individual note window. Vim
 itself gives us a couple of incredible features, including persistent undo
 across restarts.
-
 
 The user can put kzrnote-specific Vim settings in the file
 ``~/.config/kzrnote/user.vim``. At the moment, kzrnote does not have a
@@ -55,12 +54,9 @@ if they need to be set to non-default values.
 * It's not yet decided if kzrnote should try to communicate via a fake XML
   note format in the D-Bus api. Our file format on disk is locale-encoded
   plain text.
-* The project was renamed from the initial days' "vimnote" because that name
-  was far too generic.
+* **Requirements**:
 
-**Screenshot**
-
-.. image:: http://kaizer.se/wiki/code/kzrnote/kzrnote-screenshot-1.png
-   :alt: kzrnote default welcome note and configuration note
+  + Python 3
+  + Gtk 3, pygi
 
 .. vim: ft=rst tw=76 sts=4
