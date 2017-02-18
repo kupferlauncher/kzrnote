@@ -8,7 +8,6 @@ VERSION='0.2'
 
 # Preamble {{{
 import importlib
-import errno
 import locale
 import os
 import sys
@@ -165,9 +164,8 @@ def ensuredir(dirpath):
     """
     try:
         os.makedirs(dirpath, 0o700)
-    except OSError as exc:
-        if exc.errno != errno.EEXIST:
-            raise
+    except FileExistsError:
+        pass
     return dirpath
 
 def get_xdg_dir(xdg_var, fallback):
@@ -389,9 +387,8 @@ class NoteMetadataService (object):  # {{{
                         (a,b) = coords[:2]
                         (c,d) = coords[2:]
                         self.geometries[uri] = ((a,b), (c,d))
-        except EnvironmentError as exc:
-            if exc.errno != errno.ENOENT:
-                raise
+        except FileNotFoundError:
+            pass
 
     def save(self):
         """
