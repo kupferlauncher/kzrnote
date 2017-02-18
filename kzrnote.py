@@ -12,18 +12,21 @@ import locale
 import os
 import sys
 import time
-import urlparse
+import urllib.parse
+import subprocess
+
+import gi
+gi.require_version("Gtk", "3.0")
 
 import dbus
-from dbus.gobject_service import ExportedGObject
+from dbus.gi_service import ExportedGObject
 from dbus.mainloop.glib import DBusGMainLoop
-import gobject
-import glib
+
+
+from gi.repository import Gtk, Gio, GLib, GObject
 
 ## "Lazy imports"
 uuid = None
-gtk = None
-gio = None
 
 def lazy_import(name):
     if globals()[name] is None:
@@ -32,7 +35,7 @@ def lazy_import(name):
 
 def plainlog(*args):
     for arg in args:
-        sys.stderr.write(unicode(arg).encode("ascii", "replace"))
+        sys.stderr.write(str(arg))
         sys.stderr.write(" ")
     sys.stderr.write("\n")
 
@@ -50,10 +53,9 @@ def _(x):
 
 # }}}
 # Default configuration {{{
-DEFAULT_NOTE_NAME =u"Empty Note"
-NEW_NOTE_TEMPLATE=u"Note %s"
+DEFAULT_NOTE_NAME ="Empty Note"
+NEW_NOTE_TEMPLATE="Note %s"
 MAXTITLELEN=50
-WINDOW_SIZE_NOTE = (450, 450)
 WINDOW_SIZE_MAIN = (300, 400)
 NOTE_ICON = "gtk-file"
 N_RECENT_MENU = 15
@@ -69,7 +71,7 @@ CONFIG_USERRC="user.vim"
 CONFIG_VIMRC="%s.vim" % APPNAME
 VIM_EXTRA_FLAGS=[]
 
-DATA_WELCOME_NOTE=u"""\
+DATA_WELCOME_NOTE="""\
 Welcome to kzrnote
 ..................
 
@@ -95,7 +97,7 @@ There are two commands available
  :DeleteNote  delete the current note
 """
 
-DATA_ABOUT_NOTE=u"""\
+DATA_ABOUT_NOTE="""\
 Configuring kzrnote
 ...................
 
@@ -191,6 +193,9 @@ def tolocaleencoding(ustr, errors=True):
     else:
         return ustr.encode(enc, 'replace')
 
+def tofilename(ustr, errors=True):
+    return ustr
+
 def fromlocaleencoding(lstr, errors=True):
     """
     Return a unicode string from the locale-encoded @lstr
@@ -213,11 +218,16 @@ def fromnoteencoding(lstr, errors=True):
     """
     return fromlocaleencoding(lstr, errors)
 
+def opennote(filename, mode, **kwargs):
+    if 'errors' not in kwargs:
+        kwargs['errors'] = "replace"
+    return open(filename, mode, **kwargs)
+
 def fromgtkstring(gtkstr):
     return gtkstr.decode("utf-8") if isinstance(gtkstr, str) else gtkstr
 
 def toasciiuri(uuri):
-    return uuri.encode("utf-8") if isinstance(uuri, unicode) else uuri
+    return uuri.encode("utf-8") if isinstance(uuri, str) else uuri
 
 def note_uuid_from_filename(filename):
     """
@@ -237,7 +247,7 @@ def get_filename_for_note_uri(uri):
 
     does not check if it exists
     """
-    parse = urlparse.urlparse(toasciiuri(uri))
+    parse = urllib.parse.urlparse(uri)
     if parse.scheme != URL_SCHEME or parse.netloc != URL_NETLOC:
         raise ValueError("Not a %s://%s/.. URI" % (URL_SCHEME, URL_NETLOC))
     if len(parse.path) < 2:
@@ -278,7 +288,7 @@ def is_note(filename):
     return is_valid_note_filename(filename) and os.path.exists(filename)
 
 def get_new_note_name():
-    for retry in xrange(1000):
+    for retry in range(1000):
         name = str(uuid.uuid4())
         if not os.path.exists(get_note(name)):
             return get_note(name)
@@ -308,14 +318,14 @@ def overwrite_by_rename(filename, lcontent):
     touch_filename(tmp_filename, lcontent)
     os.rename(tmp_filename, filename)
 
-def read_filename(filename):
+def read_note_contents(filename):
     """
     Read @filename which must exist
 
     return a byte string
     """
     read = []
-    with open(filename, "rb") as fobj:
+    with opennote(filename, "r") as fobj:
         while 1:
             r = fobj.read()
             if not r:
@@ -355,7 +365,7 @@ class NoteMetadataService (object):  # {{{
         Load configuration
         """
         try:
-            with open(self.storagefile, 'rb') as fobj:
+            with open(self.storagefile, 'r') as fobj:
                 for line in fobj:
                     parts = line.split()
                     if len(parts) != 5:
@@ -377,8 +387,8 @@ class NoteMetadataService (object):  # {{{
         """
         Save configuration
         """
-        with open(self.storagefile, 'wb') as outfobj:
-            for uri, geometry in self.geometries.iteritems():
+        with open(self.storagefile, 'w') as outfobj:
+            for uri, geometry in self.geometries.items():
                 outfobj.write("%s " % uri)
                 ((a,b), (c,d)) = geometry
                 outfobj.write("%d %d %d %d" % (a,b,c,d))
@@ -396,25 +406,41 @@ class NoteMetadataService (object):  # {{{
         note_uri = get_note_uri(notefilename)
         return self.geometries.get(note_uri, None)
 
+
+def guess_default_window_size(cols=80, rows=60):
+    """
+    Return size tuple width, height (in pixels)
+    """
+    textview = Gtk.TextView.new()
+    textview.set_property("monospace", True)
+    # Find the size of one (monospace) letter
+    playout = textview.create_pango_layout("X")
+    ink_r, logical_r = playout.get_pixel_extents()
+
+    return (
+        ink_r.width * cols,
+        ink_r.height * rows,
+    )
+
 # }}}
 # MainInstance {{{
-server_name = "se.kaizer.%s" % APPNAME
-interface_name = "se.kaizer.%s" % APPNAME
-object_name = "/se/kaizer/%s" % APPNAME
+server_name = "io.github.kupferlauncher.%s" % APPNAME
+interface_name = "io.github.kupferlauncher.%s" % APPNAME
+object_name = "/io/github/kupferlauncher/%s" % APPNAME
 
 class MainInstance (ExportedGObject):
     __gsignals__ = {
-        "note-created": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
-            (gobject.TYPE_STRING, )),
+        "note-created": (GObject.SIGNAL_RUN_FIRST, GObject.TYPE_NONE,
+            (GObject.TYPE_STRING, )),
         ## signature: filepath, bool:user_action
-        "note-deleted": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
-            (gobject.TYPE_STRING, gobject.TYPE_BOOLEAN)),
-        "title-updated": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
-            (gobject.TYPE_STRING, gobject.TYPE_STRING )),
-        "note-contents-changed": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
-            (gobject.TYPE_STRING, )),
-        "note-opened": (gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
-            (gobject.TYPE_STRING, gobject.TYPE_PYOBJECT)),
+        "note-deleted": (GObject.SIGNAL_RUN_FIRST, GObject.TYPE_NONE,
+            (GObject.TYPE_STRING, GObject.TYPE_BOOLEAN)),
+        "title-updated": (GObject.SIGNAL_RUN_FIRST, GObject.TYPE_NONE,
+            (GObject.TYPE_STRING, GObject.TYPE_STRING )),
+        "note-contents-changed": (GObject.SIGNAL_RUN_FIRST, GObject.TYPE_NONE,
+            (GObject.TYPE_STRING, )),
+        "note-opened": (GObject.SIGNAL_RUN_FIRST, GObject.TYPE_NONE,
+            (GObject.TYPE_STRING, GObject.TYPE_PYOBJECT)),
         ## signature: filename, GtkWindow
     }
     def __init__(self):
@@ -453,8 +479,8 @@ class MainInstance (ExportedGObject):
     def wait_for_display_notes(self):
         log("Wait for display_notes, setup done: %s" %
             self.ready_to_display_notes)
-        while gtk.events_pending() and not self.ready_to_display_notes:
-            gtk.main_iteration()
+        while Gtk.events_pending() and not self.ready_to_display_notes:
+            Gtk.main_iteration()
 
     # }}}
     # D-Bus Interface {{{
@@ -480,6 +506,7 @@ class MainInstance (ExportedGObject):
             self.delete_note(filename)
             return True
         else:
+            log("Is not a note", uri)
             return False
 
     @dbus.service.method(interface_name, in_signature="s", out_signature="b")
@@ -488,11 +515,13 @@ class MainInstance (ExportedGObject):
         Raises ValueError on invalid @uri
         """
         filename = get_filename_for_note_uri(uri)
+        log(filename)
         if is_note(filename):
             self.wait_for_display_notes()
             self.display_note_by_file(filename)
             return True
         else:
+            log("Is not a note", uri)
             return False
 
     @dbus.service.method(interface_name)
@@ -551,7 +580,7 @@ class MainInstance (ExportedGObject):
         """
         filename = get_filename_for_note_uri(uri)
         if is_note(filename):
-            return fromnoteencoding(read_filename(filename))
+            return read_note_contents(filename)
         else:
             return ""
 
@@ -581,16 +610,19 @@ class MainInstance (ExportedGObject):
         ## NOTE: For "compatibility", we are always case sensistive
         results = []
         grep_cmd = ['/bin/grep', '-l', '-i']
-        grep_cmd.extend(['-e', tolocaleencoding(query, errors=False)])
+        grep_cmd.extend(['-e', query])
         grep_cmd.extend(['-r', get_notesdir()])
         grep_cmd.append('--include=*%s' % NOTE_SUFFIX)
         grep_cmd.extend(['--exclude-dir=%s' % CACHE_SWP,
                          '--exclude-dir=%s' % DATA_ATTIC])
         log(grep_cmd)
-        cin, cout = os.popen2(grep_cmd)
+        p = subprocess.Popen(grep_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                             close_fds=True)
+        cin, cout = (p.stdin, p.stdout)
         cin.close()
         try:
             for line in cout:
+                line = fromlocaleencoding(line)
                 log(line)
                 line = line.strip()
                 if is_note(line):
@@ -638,7 +670,7 @@ class MainInstance (ExportedGObject):
     @dbus.service.method(interface_name, in_signature="ss", out_signature="b")
     def KzrnoteDelete(self, argument, sfilename):
         log("KzrnoteDelete: %s, %s" % (argument, sfilename))
-        lfilename = tolocaleencoding(sfilename, False)
+        lfilename = tofilename(sfilename, False)
         if not is_note(lfilename):
             raise ValueError("Cannot delete %r" % lfilename)
         self.delete_note(lfilename)
@@ -650,7 +682,7 @@ class MainInstance (ExportedGObject):
         ## Open note either by note uuid or by title
         try:
             ## make sure the filename is a byte string
-            largument = tolocaleencoding(argument, False)
+            largument = tofilename(argument, False)
             filename = get_filename_for_note_basename(largument)
         except ValueError:
             filename = self.has_note_by_title(argument, False)
@@ -664,7 +696,7 @@ class MainInstance (ExportedGObject):
 
     @dbus.service.method(interface_name)
     def Quit(self):
-        gtk.main_quit()
+        Gtk.main_quit()
 
     # }}}
     # Note Model {{{
@@ -749,7 +781,7 @@ class MainInstance (ExportedGObject):
         Titles longer than the max length are truncated(!)
         """
         utitle = utitle[:MAXTITLELEN]
-        for filename, note_title in self.file_names.iteritems():
+        for filename, note_title in self.file_names.items():
             if case_sensitive and note_title == utitle:
                 return filename
             elif not case_sensitive and note_title.lower() == utitle.lower():
@@ -768,9 +800,9 @@ class MainInstance (ExportedGObject):
 
     def extract_note_title(self, filepath):
         try:
-            with open(filepath, "r") as f:
+            with opennote(filepath, "r") as f:
                 for firstline in f:
-                    ufirstline = fromnoteencoding(firstline, errors=False).strip()
+                    ufirstline = firstline.strip()
                     if ufirstline:
                         return ufirstline[:MAXTITLELEN]
                     break
@@ -788,21 +820,21 @@ class MainInstance (ExportedGObject):
 
     def setup_gui(self):
         # notification icon
-        status_icon = gtk.status_icon_new_from_icon_name(ICONNAME)
+        status_icon = Gtk.StatusIcon.new_from_icon_name(ICONNAME)
         status_icon.set_tooltip_text(APPNAME)
         status_icon.set_visible(True)
         self.status_icon = status_icon
 
         # main window with its toolbar and note list
-        gtk.window_set_default_icon_name(ICONNAME)
-        self.window = gtk.Window()
+        Gtk.Window.set_default_icon_name(ICONNAME)
+        self.window = Gtk.Window.new(Gtk.WindowType.TOPLEVEL)
         self.window.set_default_size(*WINDOW_SIZE_MAIN)
-        self.list_view = gtk.TreeView()
-        self.list_store = gtk.ListStore(gobject.TYPE_STRING,
-                                        gobject.TYPE_STRING)
+        self.list_view = Gtk.TreeView.new()
+        self.list_store = Gtk.ListStore(GObject.TYPE_STRING,
+                                        GObject.TYPE_STRING)
         self.list_view.set_model(self.list_store)
-        cell = gtk.CellRendererText()
-        filename_col = gtk.TreeViewColumn("Note", cell, text=1)
+        cell = Gtk.CellRendererText()
+        filename_col = Gtk.TreeViewColumn("Note", cell, text=1)
         self.list_view.append_column(filename_col)
         self.reload_filemodel(self.list_store)
         self.list_view.set_rules_hint(True)
@@ -817,41 +849,41 @@ class MainInstance (ExportedGObject):
             ## NOTE: Return *False* for matches
             return key not in model.get_value(miter, column).lower()
         self.list_view.set_search_equal_func(search_cmp)
-        toolbar = gtk.Toolbar()
-        new = gtk.ToolButton(gtk.STOCK_NEW)
+        toolbar = Gtk.Toolbar()
+        new = Gtk.ToolButton(Gtk.STOCK_NEW)
         new.set_label(_("Create _New Note"))
         new.set_use_underline(True)
         new.set_is_important(True)
         new.connect("clicked", self.create_open_note)
-        delete = gtk.ToolButton(gtk.STOCK_DELETE)
+        delete = Gtk.ToolButton(Gtk.STOCK_DELETE)
         delete.connect("clicked", self.on_delete_row_cliecked, self.list_view)
         delete.set_is_important(True)
-        quit = gtk.ToolButton(gtk.STOCK_QUIT)
+        quit = Gtk.ToolButton(Gtk.STOCK_QUIT)
         quit.set_is_important(True)
-        quit.connect("clicked", gtk.main_quit)
+        quit.connect("clicked", Gtk.main_quit)
         def toolbar_append(item):
             toolbar.insert(item, toolbar.get_n_items())
         toolbar_append(new)
         toolbar_append(delete)
         toolbar_append(quit)
         toolbar.show_all()
-        scrollwin = gtk.ScrolledWindow()
-        scrollwin.set_policy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
+        scrollwin = Gtk.ScrolledWindow()
+        scrollwin.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scrollwin.add(self.list_view)
         scrollwin.show()
-        vbox = gtk.VBox()
+        vbox = Gtk.VBox()
         vbox.pack_start(toolbar, False, True, 0)
         vbox.pack_start(scrollwin, True, True, 0)
         vbox.show()
         self.window.add(vbox)
         # focus the list so that the user can search immediately
         self.list_view.grab_focus()
-        self.window.connect("delete-event", self.window.hide_on_delete)
+        self.window.connect("delete-event", lambda *args: self.window.hide() or True)
         status_icon.connect("activate", self.on_status_icon_clicked)
         status_icon.connect("popup-menu", self.on_status_icon_menu)
 
-        gfile = gio.File(path=get_notesdir())
-        self.monitor = gfile.monitor_directory()
+        gfile = Gio.File.new_for_path(get_notesdir())
+        self.monitor = gfile.monitor_directory(Gio.FileMonitorFlags.NONE, None)
         if self.monitor:
             self.monitor.connect("changed",
                                  self.on_notes_monitor_changed,
@@ -880,7 +912,7 @@ class MainInstance (ExportedGObject):
 
     def on_status_icon_clicked(self, widget):
         ## on activate, emit a signal to open the menu
-        widget.emit("popup-menu", 1, gtk.get_current_event_time())
+        widget.emit("popup-menu", 1, Gtk.get_current_event_time())
 
     def on_status_icon_menu(self, widget, button, activate_time):
         def present_window(sender):
@@ -892,38 +924,39 @@ class MainInstance (ExportedGObject):
         ## make and show a popup menu
         ## None marks the separators and the recent notes
         actions = [
-            (gtk.STOCK_NEW, _("Create _New Note"), self.create_open_note),
-            (gtk.STOCK_FIND, _("_Show All Notes"), present_window),
+            (Gtk.STOCK_NEW, _("Create _New Note"), self.create_open_note),
+            (Gtk.STOCK_FIND, _("_Show All Notes"), present_window),
             None,
-            (gtk.STOCK_QUIT, None, gtk.main_quit),
+            (Gtk.STOCK_QUIT, None, Gtk.main_quit),
         ]
 
-        menu = gtk.Menu()
+        menu = Gtk.Menu()
 
         for action in actions:
             if action is not None:
                 icon, title, target = action
-                mitem = gtk.ImageMenuItem(icon)
+                mitem = Gtk.ImageMenuItem.new_from_stock(icon)
                 if title:
                     mitem.set_label(title)
                 mitem.connect("activate", target)
                 menu.append(mitem)
             else:
                 ## insert the recent notes
-                menu.append(gtk.SeparatorMenuItem())
+                menu.append(Gtk.SeparatorMenuItem())
                 notes_sorted = list(self.get_note_filenames(True))
                 for filename in notes_sorted[:N_RECENT_MENU]:
                     display_name = self.ensure_note_title(filename)
-                    mitem = gtk.ImageMenuItem(NOTE_ICON)
+                    mitem = Gtk.ImageMenuItem.new()
+                    #mitem.set(NOTE_ICON)
                     mitem.set_label(display_name)
                     mitem.set_use_underline(False)
                     mitem.set_always_show_image(True)
                     mitem.connect("activate", display_note, filename)
                     menu.append(mitem)
-                menu.append(gtk.SeparatorMenuItem())
+                menu.append(Gtk.SeparatorMenuItem())
         menu.show_all()
-        menu.popup(None, None, gtk.status_icon_position_menu,
-                   button, activate_time, widget)
+        menu.popup(None, None, Gtk.StatusIcon.position_menu,
+                   widget, button, activate_time)
 
     def on_delete_row_cliecked(self, toolitem, treeview):
         path, column = treeview.get_cursor()
@@ -964,8 +997,8 @@ class MainInstance (ExportedGObject):
         for preload_id in list(self.preload_ids):
             log("closing", preload_id)
             self.preload_ids.pop(preload_id).destroy()
-        while gtk.events_pending():
-            gtk.main_iteration()
+        while Gtk.events_pending():
+            Gtk.main_iteration()
         time.sleep(0.5)
 
     def on_note_deleted(self, sender, filepath, user_action):
@@ -979,17 +1012,16 @@ class MainInstance (ExportedGObject):
             self.open_files[filepath].set_title(title)
         ## write out all titles to a cache file
         cache = ensuredir(get_cache_dir())
-        with open(os.path.join(cache, CACHE_NOTETITLES), "wb") as fobj:
+        with opennote(os.path.join(cache, CACHE_NOTETITLES), "w") as fobj:
             for filepath in self.get_note_filenames(False):
-                title = tonoteencoding(self.ensure_note_title(filepath),
-                                       errors=False)
+                title = self.ensure_note_title(filepath)
                 fobj.write("%s\n" % (title, ))
 
     def on_notes_monitor_changed(self, monitor, gfile1, gfile2, event, model):
-        if event in (gio.FILE_MONITOR_EVENT_CREATED,
-                     gio.FILE_MONITOR_EVENT_DELETED):
+        if event in (Gio.FileMonitorEvent.CREATED,
+                     Gio.FileMonitorEvent.DELETED):
             self.model_reassess_file(model, gfile1.get_path(), addrm=True)
-        if event in (gio.FILE_MONITOR_EVENT_CHANGES_DONE_HINT, ):
+        if event in (Gio.FileMonitorEvent.CHANGES_DONE_HINT, ):
             self.model_reassess_file(model, gfile1.get_path(), change=True)
 
     def on_note_opened(self, sender, filepath, window):
@@ -1009,8 +1041,8 @@ class MainInstance (ExportedGObject):
             window.move(*position)
 
     def get_window_title_for_note_title(self, note_title):
-        progname = glib.get_application_name()
-        title = u"%s: %s" % (progname, note_title)
+        progname = GLib.get_application_name()
+        title = "%s: %s" % (progname, note_title)
         return title
 
     def open_note_on_screen(self, filepath, title=None, screen=None,
@@ -1026,7 +1058,7 @@ class MainInstance (ExportedGObject):
 
     def create_open_note(self, sender):
         note_name = get_new_note_name()
-        time_ustr = fromlocaleencoding(time.strftime("%c"), errors=False)
+        time_ustr = time.strftime("%c")
         lcontent = tonoteencoding(NEW_NOTE_TEMPLATE % time_ustr, errors=False)
         touch_filename(note_name, lcontent)
         return self.open_note_on_screen(note_name)
@@ -1065,15 +1097,15 @@ class MainInstance (ExportedGObject):
             for noteuri in arguments:
                 self.DisplayNote(noteuri)
         except ValueError as exc:
-            return u"Argument %s: %s" % (noteuri, exc)
-        return u""
+            return "Argument %s: %s" % (noteuri, exc)
+        return ""
 
     def handle_commandline_main(self, arguments, display, desktop_startup_id):
         """handling commandline as main instance, will output errors"""
         errmsg = self.handle_commandline(arguments, display, desktop_startup_id)
         if errmsg:
             error(errmsg)
-        # stop the glib idle_add invocation
+        # stop the GLib idle_add invocation
         return False
 
     # }}}
@@ -1096,11 +1128,11 @@ class MainInstance (ExportedGObject):
 
         Return (window, preload_id)
         """
-        window = gtk.Window()
-        window.set_default_size(*WINDOW_SIZE_NOTE)
+        window = Gtk.Window()
+        window.set_default_size(*guess_default_window_size())
         server_id = self.generate_vim_server_id()
 
-        socket = gtk.Socket()
+        socket = Gtk.Socket()
         window.realize()
         window.add(socket)
         socket.show()
@@ -1116,9 +1148,9 @@ class MainInstance (ExportedGObject):
 
         log("Spawning", argv)
         pid, sin, sout, serr = \
-                glib.spawn_async(argv, child_setup=self.on_spawn_child_setup,
-                         flags=glib.SPAWN_SEARCH_PATH|glib.SPAWN_DO_NOT_REAP_CHILD)
-        glib.child_watch_add(pid, self.on_vim_exit, window)
+                GLib.spawn_async(argv, child_setup=self.on_spawn_child_setup,
+                         flags=GLib.SPAWN_SEARCH_PATH|GLib.SPAWN_DO_NOT_REAP_CHILD)
+        GLib.child_watch_add(pid, self.on_vim_exit, window)
         return window
 
     def on_spawn_child_setup(self):
@@ -1128,7 +1160,7 @@ class MainInstance (ExportedGObject):
         log("Plug connected to Socket")
         if is_preload:
             ## delay registration just a bit longer
-            glib.timeout_add(100, self.after_socket_plug_added,
+            GLib.timeout_add(100, self.after_socket_plug_added,
                              server_id, window)
 
     def after_socket_plug_added(self, server_id, window):
@@ -1145,7 +1177,7 @@ class MainInstance (ExportedGObject):
         ensurefile(os.path.join(CONFIG, CONFIG_USERRC))
         ## write the kzrnote .vim file
         rpath = os.path.join(CONFIG, CONFIG_VIMRC)
-        with open(rpath, "wb") as runtimefobj:
+        with open(rpath, "w") as runtimefobj:
             runtimefobj.write(CONFIG_RCTEXT)
         return rpath
 
@@ -1162,9 +1194,9 @@ class MainInstance (ExportedGObject):
 
         log("Using preloaded", preload_argv)
         ## watch this process
-        pid, sin, sout, serr = glib.spawn_async(preload_argv,
-                      flags=glib.SPAWN_SEARCH_PATH|glib.SPAWN_DO_NOT_REAP_CHILD)
-        glib.child_watch_add(pid, self.on_vim_remote_exit, preload_argv)
+        pid, sin, sout, serr = GLib.spawn_async(preload_argv,
+                      flags=GLib.SPAWN_SEARCH_PATH|GLib.SPAWN_DO_NOT_REAP_CHILD)
+        GLib.child_watch_add(pid, self.on_vim_remote_exit, preload_argv)
         self.position_window(window, filepath)
         window.present()
         self.emit("note-opened", filepath, window)
@@ -1174,12 +1206,12 @@ class MainInstance (ExportedGObject):
         log(" vim --remote exited with status", exit_status)
         if exit_status != 0:
             pass
-            #glib.timeout_add(800, self._respawn_again, preload_argv)
+            #GLib.timeout_add(800, self._respawn_again, preload_argv)
 
     def new_vimdow(self, name, filepath):
         if self.preload_ids:
             self.new_vimdow_preloaded(name, filepath)
-            glib.timeout_add_seconds(1, self.preload)
+            GLib.timeout_add_seconds(1, self.preload)
             return
         window = self.start_vim_hidden(['-c', 'e %s' % filepath])
         self.open_files[filepath] = window
@@ -1190,7 +1222,7 @@ class MainInstance (ExportedGObject):
 
     def on_vim_exit(self, pid, condition, window):
         log( "Vim Pid: %d  exited  (%x)" % (pid, condition))
-        for k,v in self.open_files.items():
+        for k,v in list(self.open_files.items()):
             if v == window:
                 del self.open_files[k]
                 break
@@ -1220,8 +1252,8 @@ def setup_locale():
 def main(argv):
     setup_locale()
     DBusGMainLoop(set_as_default=True)
-    glib.set_application_name(APPNAME)
-    glib.set_prgname(APPNAME)
+    GLib.set_application_name(APPNAME)
+    GLib.set_prgname(APPNAME)
     uargv = [fromlocaleencoding(arg, errors=False) for arg in argv[1:]]
     desktop_startup_id = os.getenv("DESKTOP_STARTUP_ID", "")
     try:
@@ -1234,14 +1266,14 @@ def main(argv):
         log("An instance already running, passing on commandline...")
         return service_send_commandline(uargv, "", desktop_startup_id)
     lazy_import("uuid")
-    lazy_import("gtk")
-    lazy_import("gio")
-    glib.idle_add(m.setup_basic)
-    glib.idle_add(m.setup_gui)
-    glib.idle_add(m.handle_commandline_main, uargv, "", desktop_startup_id)
+    #lazy_import("Gtk")
+    #lazy_import("Gio")
+    GLib.idle_add(m.setup_basic)
+    GLib.idle_add(m.setup_gui)
+    GLib.idle_add(m.handle_commandline_main, uargv, "", desktop_startup_id)
     ensuredir(get_notesdir())
     try:
-        gtk.main()
+        Gtk.main()
     finally:
         m.unregister()
         m.close_all()

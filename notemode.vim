@@ -158,9 +158,9 @@ set wm=1
 set linebreak
 
 
-let s:kzrnote_service = 'se.kaizer.kzrnote'
-let s:kzrnote_object = '/se/kaizer/kzrnote'
-let s:kzrnote_interface = 'se.kaizer.kzrnote'
+let s:kzrnote_service = 'io.github.kupferlauncher.kzrnote'
+let s:kzrnote_object = '/io/github/kupferlauncher/kzrnote'
+let s:kzrnote_interface = 'io.github.kupferlauncher.kzrnote'
 
 function! KzrnoteMethod (method, arg, sender)
     silent exe '!dbus-send' '--type=method_call' '--print-reply'
