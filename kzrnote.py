@@ -27,6 +27,10 @@ from gi.repository import Gtk, Gio, GLib, GObject
 
 ## "Lazy imports"
 uuid = None
+#Gio = None
+#Gtk = None
+
+debug = True
 
 def lazy_import(name):
     if globals()[name] is None:
@@ -38,6 +42,12 @@ def plainlog(*args):
         sys.stderr.write(str(arg))
         sys.stderr.write(" ")
     sys.stderr.write("\n")
+
+def debug_log(*args):
+    if debug:
+        sys.stderr.write("%s: " % __name__)
+        sys.stderr.write(str(time.time()) + " ")
+        plainlog(*args)
 
 def log(*args):
     sys.stderr.write("%s: " % __name__)
@@ -477,8 +487,7 @@ class MainInstance (ExportedGObject):
         dbus.Bus().release_name(server_name)
 
     def wait_for_display_notes(self):
-        log("Wait for display_notes, setup done: %s" %
-            self.ready_to_display_notes)
+        debug_log("Wait for display_notes, setup done: %s" % self.ready_to_display_notes)
         while Gtk.events_pending() and not self.ready_to_display_notes:
             Gtk.main_iteration()
 
@@ -506,7 +515,7 @@ class MainInstance (ExportedGObject):
             self.delete_note(filename)
             return True
         else:
-            log("Is not a note", uri)
+            error("Is not a note", uri)
             return False
 
     @dbus.service.method(interface_name, in_signature="s", out_signature="b")
@@ -515,13 +524,12 @@ class MainInstance (ExportedGObject):
         Raises ValueError on invalid @uri
         """
         filename = get_filename_for_note_uri(uri)
-        log(filename)
         if is_note(filename):
             self.wait_for_display_notes()
             self.display_note_by_file(filename)
             return True
         else:
-            log("Is not a note", uri)
+            error("Is not a note", uri)
             return False
 
     @dbus.service.method(interface_name)
@@ -615,7 +623,7 @@ class MainInstance (ExportedGObject):
         grep_cmd.append('--include=*%s' % NOTE_SUFFIX)
         grep_cmd.extend(['--exclude-dir=%s' % CACHE_SWP,
                          '--exclude-dir=%s' % DATA_ATTIC])
-        log(grep_cmd)
+        debug_log(grep_cmd)
         p = subprocess.Popen(grep_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                              close_fds=True)
         cin, cout = (p.stdin, p.stdout)
@@ -623,7 +631,7 @@ class MainInstance (ExportedGObject):
         try:
             for line in cout:
                 line = fromlocaleencoding(line)
-                log(line)
+                debug_log(line)
                 line = line.strip()
                 if is_note(line):
                     results.append(get_note_uri(line))
@@ -663,13 +671,13 @@ class MainInstance (ExportedGObject):
 
     @dbus.service.method(interface_name, in_signature="ss", out_signature="b")
     def KzrnoteNew(self, argument, sfilename):
-        log("KzrnoteNew: %s, %s" % (argument, sfilename))
+        debug_log("KzrnoteNew: %s, %s" % (argument, sfilename))
         self.create_open_note(None)
         return True
 
     @dbus.service.method(interface_name, in_signature="ss", out_signature="b")
     def KzrnoteDelete(self, argument, sfilename):
-        log("KzrnoteDelete: %s, %s" % (argument, sfilename))
+        debug_log("KzrnoteDelete: %s, %s" % (argument, sfilename))
         lfilename = tofilename(sfilename, False)
         if not is_note(lfilename):
             raise ValueError("Cannot delete %r" % lfilename)
@@ -678,7 +686,7 @@ class MainInstance (ExportedGObject):
 
     @dbus.service.method(interface_name, in_signature="ss", out_signature="b")
     def KzrnoteOpen(self, argument, sfilename):
-        log("KzrnoteOpen: %s, %s" % (argument, sfilename))
+        debug_log("KzrnoteOpen: %s, %s" % (argument, sfilename))
         ## Open note either by note uuid or by title
         try:
             ## make sure the filename is a byte string
@@ -687,10 +695,10 @@ class MainInstance (ExportedGObject):
         except ValueError:
             filename = self.has_note_by_title(argument, False)
         if filename and is_note(filename):
-            log("Open:", filename)
+            debug_log("Open:", filename)
             self.display_note_by_file(filename)
             return True
-        log("Can not open:", largument)
+        error("Can not open:", largument)
         return False
 
 
@@ -748,7 +756,7 @@ class MainInstance (ExportedGObject):
             del model[rowidx]
             self.emit("note-deleted", filename, False)
         else:
-            log("File modifed does not exist: %r" % filename)
+            error("File modifed does not exist: %r" % filename)
 
 
     def get_note_change_date(self, filename):
@@ -845,7 +853,6 @@ class MainInstance (ExportedGObject):
         ## setup the list view to match searches by any substring
         ## (the default only matches prefixes)
         def search_cmp(model, column, key, miter):
-            key = fromgtkstring(key).lower()
             ## NOTE: Return *False* for matches
             return key not in model.get_value(miter, column).lower()
         self.list_view.set_search_equal_func(search_cmp)
@@ -975,7 +982,7 @@ class MainInstance (ExportedGObject):
             self.open_note_on_screen(filename)
 
     def delete_note(self, filepath):
-        log("Moving ", filepath)
+        debug_log("Moving ", filepath)
         notes_dir = get_notesdir()
         attic_dir = os.path.join(notes_dir, DATA_ATTIC)
         try:
@@ -992,10 +999,10 @@ class MainInstance (ExportedGObject):
         self.metadata_service.save()
         self.window.hide()
         for filepath in list(self.open_files):
-            log("closing", filepath)
+            debug_log("closing", filepath)
             self.open_files.pop(filepath).destroy()
         for preload_id in list(self.preload_ids):
-            log("closing", preload_id)
+            debug_log("closing", preload_id)
             self.preload_ids.pop(preload_id).destroy()
         while Gtk.events_pending():
             Gtk.main_iteration()
@@ -1077,7 +1084,7 @@ class MainInstance (ExportedGObject):
 
         returns: Error output (unicode) (Argument parsing messages)
         """
-        log("handle commandline", arguments, display, desktop_startup_id)
+        debug_log("handle commandline", arguments, display, desktop_startup_id)
 
         ## parse out timestamp from startup id
         timestamp = 0
@@ -1088,7 +1095,7 @@ class MainInstance (ExportedGObject):
                 pass
         if not arguments:
             if timestamp:
-                log(timestamp)
+                debug_log(timestamp)
                 self.window.set_startup_id(desktop_startup_id)
                 self.window.present_with_time(timestamp)
             else:
@@ -1146,7 +1153,7 @@ class MainInstance (ExportedGObject):
         argv.extend(['-c', 'so %s' % self.write_vimrc_file()])
         argv.extend(extra_args)
 
-        log("Spawning", argv)
+        debug_log("Spawning", argv)
         pid, sin, sout, serr = \
                 GLib.spawn_async(argv, child_setup=self.on_spawn_child_setup,
                          flags=GLib.SPAWN_SEARCH_PATH|GLib.SPAWN_DO_NOT_REAP_CHILD)
@@ -1157,14 +1164,14 @@ class MainInstance (ExportedGObject):
         try_register_pr_pdeathsig()
 
     def on_socket_plug_added(self, socket, server_id, window, is_preload):
-        log("Plug connected to Socket")
+        debug_log("Plug connected to Socket")
         if is_preload:
             ## delay registration just a bit longer
             GLib.timeout_add(100, self.after_socket_plug_added,
                              server_id, window)
 
     def after_socket_plug_added(self, server_id, window):
-        log("Registering %r as ready" % server_id)
+        debug_log("Registering %r as ready" % server_id)
         ## put the returned window in the preload table
         self.preload_ids[server_id] = window
         return False
@@ -1192,7 +1199,7 @@ class MainInstance (ExportedGObject):
         preload_argv = [VIM, '-g', '-f', '--servername', preload_id,
                         '--remote-send', '<ESC>:e %s<CR><CR>' % filepath]
 
-        log("Using preloaded", preload_argv)
+        debug_log("Using preloaded", preload_argv)
         ## watch this process
         pid, sin, sout, serr = GLib.spawn_async(preload_argv,
                       flags=GLib.SPAWN_SEARCH_PATH|GLib.SPAWN_DO_NOT_REAP_CHILD)
@@ -1203,9 +1210,9 @@ class MainInstance (ExportedGObject):
 
     def on_vim_remote_exit(self, pid, condition, preload_argv):
         exit_status = os.WEXITSTATUS(condition)
-        log(" vim --remote exited with status", exit_status)
+        debug_log(" vim --remote exited with status", exit_status)
         if exit_status != 0:
-            pass
+            error(" vim --remote exited with status", exit_status)
             #GLib.timeout_add(800, self._respawn_again, preload_argv)
 
     def new_vimdow(self, name, filepath):
@@ -1221,13 +1228,13 @@ class MainInstance (ExportedGObject):
         self.emit("note-opened", filepath, window)
 
     def on_vim_exit(self, pid, condition, window):
-        log( "Vim Pid: %d  exited  (%x)" % (pid, condition))
+        debug_log( "Vim Pid: %d  exited  (%x)" % (pid, condition))
         for k,v in list(self.open_files.items()):
             if v == window:
                 del self.open_files[k]
                 break
         else:
-            log("Window closed but already unregistered: %d %d" % (pid, condition))
+            error("Window closed but already unregistered: %d %d" % (pid, condition))
         window.destroy()
 
 # }}}
@@ -1254,15 +1261,21 @@ def main(argv):
     DBusGMainLoop(set_as_default=True)
     GLib.set_application_name(APPNAME)
     GLib.set_prgname(APPNAME)
-    uargv = [fromlocaleencoding(arg, errors=False) for arg in argv[1:]]
+    uargv = argv[1:]
+    if uargv and uargv[0] == '--debug':
+        uargv.pop(0)
+        global debug
+        debug = True
+    else:
+        debug = False
     desktop_startup_id = os.getenv("DESKTOP_STARTUP_ID", "")
     try:
         m = MainInstance()
     except RuntimeError as exc:
-        log(exc)
+        error(exc)
         return 1
     except NameError as exc:
-        log(exc)
+        debug_log(exc)
         log("An instance already running, passing on commandline...")
         return service_send_commandline(uargv, "", desktop_startup_id)
     lazy_import("uuid")
