@@ -1,3 +1,3 @@
 [D-BUS Service]
-Name=se.kaizer.kzrnote
+Name=io.github.kupferlauncher.kzrnote
 Exec=@BINDIR@/kzrnote

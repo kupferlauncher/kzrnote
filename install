@@ -9,7 +9,7 @@
 : ${BINDIR:=$PREFIX/bin}
 : ${DBUSDIR=$DATADIR/dbus-1/services}
 : ${DESTDIR:=}
-: ${PYTHON:=$(which python)}
+: ${PYTHON:=$(which python3)}
 : ${INSTALL:=install -c}
 
 set -e
@@ -34,7 +34,7 @@ $INSTALL -v -D $TMPNAME "$DBINDIR/kzrnote"
 rm -rf $TMPNAME
 
 ## Make the service file
-SVC="se.kaizer.kzrnote.service"
+SVC="io.github.kupferlauncher.kzrnote.service"
 TMPNAME="$SVC.$$"
 sed -e "s_@BINDIR@_${BINDIR}_" $SVC.in > $TMPNAME
 $INSTALL -v -m 644 -D $TMPNAME "$DDBUSDIR/$SVC"
@@ -57,3 +57,5 @@ do
 	$INSTALL -v -m 644 -D $T "$DICONDIR/${sz}x${sz}/apps/kzrnote.png"
 	rm -f $T
 done
+
+# vim: ft=sh
