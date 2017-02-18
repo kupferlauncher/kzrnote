@@ -7,6 +7,7 @@ ICONNAME = 'kzrnote'
 VERSION='0.2'
 
 # Preamble {{{
+import importlib
 import errno
 import locale
 import os
@@ -23,19 +24,18 @@ from dbus.gi_service import ExportedGObject
 from dbus.mainloop.glib import DBusGMainLoop
 
 
-from gi.repository import Gtk, Gio, GLib, GObject
+from gi.repository import GObject, GLib
 
 ## "Lazy imports"
 uuid = None
-#Gio = None
-#Gtk = None
+Gio = None
+Gtk = None
 
 debug = True
 
-def lazy_import(name):
+def lazy_import(name, fullname=None):
     if globals()[name] is None:
-        globals()[name] = __import__(name)
-
+        globals()[name] = importlib.import_module(fullname or name)
 
 def plainlog(*args):
     for arg in args:
@@ -1279,8 +1279,8 @@ def main(argv):
         log("An instance already running, passing on commandline...")
         return service_send_commandline(uargv, "", desktop_startup_id)
     lazy_import("uuid")
-    #lazy_import("Gtk")
-    #lazy_import("Gio")
+    lazy_import("Gtk", "gi.repository.Gtk")
+    lazy_import("Gio", "gi.repository.Gio")
     GLib.idle_add(m.setup_basic)
     GLib.idle_add(m.setup_gui)
     GLib.idle_add(m.handle_commandline_main, uargv, "", desktop_startup_id)
