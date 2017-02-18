@@ -4,7 +4,7 @@
 APPNAME = "kzrnote"
 VIM = 'vim'
 ICONNAME = 'kzrnote'
-VERSION='0.1'
+VERSION='0.2'
 
 # Preamble {{{
 import errno

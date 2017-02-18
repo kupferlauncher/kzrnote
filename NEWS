@@ -1,0 +1,7 @@
+
+
+kzrnote 0.2
+-----------
+
++ Port to Python 3 and Gtk 3
++ Switch D-Bus names
