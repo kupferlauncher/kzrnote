@@ -1142,9 +1142,8 @@ class MainInstance (ExportedGObject):
         server_id = self.generate_vim_server_id()
 
         argv = [VIM]
-        argv.extend(['--servername', server_id])
         argv.extend(VIM_EXTRA_FLAGS)
-        argv.extend(['-c', 'so %s' % self.write_vimrc_file()])
+        argv.extend(['-S', self.write_vimrc_file()])
         argv.extend(extra_args)
 
 
