@@ -1240,7 +1240,7 @@ class MainInstance (ExportedGObject):
         terminal.connect("key-press-event", self.on_terminal_key_press_event)
 
         window.add(terminal)
-        window.show_all()
+        terminal.show()
         return window
 
     def on_spawn_child_setup(self):
