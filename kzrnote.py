@@ -8,6 +8,7 @@ VERSION='0.2'
 
 # Preamble {{{
 import importlib
+import json
 import locale
 import os
 import signal
@@ -25,11 +26,12 @@ from dbus.gi_service import ExportedGObject
 from dbus.mainloop.glib import DBusGMainLoop
 
 
-from gi.repository import GObject, GLib
+from gi.repository import GObject, GLib, Pango
 
 ## "Lazy imports"
 uuid = None
 Gio = None
+Gdk = None
 Gtk = None
 Vte = None
 
@@ -81,6 +83,7 @@ so ./notemode.vim
 """
 CONFIG_USERRC="user.vim"
 CONFIG_VIMRC="%s.vim" % APPNAME
+CONFIG_FILENAME="config.json"
 VIM_EXTRA_FLAGS=[]
 
 DATA_WELCOME_NOTE="""\
@@ -416,6 +419,41 @@ class NoteMetadataService (object):  # {{{
         note_uri = get_note_uri(notefilename)
         return self.geometries.get(note_uri, None)
 
+class Config:
+    def __init__(self):
+        CONFIG = ensuredir(get_config_dir())
+        self.filename = os.path.join(CONFIG, CONFIG_FILENAME)
+        self.config = {}
+
+    def load(self):
+        try:
+            with open(self.filename) as f:
+                self.config = json.load(f)
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            error("When reading config:", exc)
+            return
+
+    def get_color(self, name):
+        fg = self.config.get("colors", {}).get(name)
+        if fg is None:
+            return None
+        c = Gdk.RGBA()
+        if isinstance(fg, str) and c.parse(fg):
+            return c
+        else:
+            error("Could not parse color: %r" % (fg, ))
+            return None
+
+    def get_font(self):
+        font_desc = self.config.get("font")
+        if not font_desc or not isinstance(font_desc, str):
+            return None
+        fd = Pango.FontDescription.from_string(font_desc)
+        if not fd.get_size():
+            fd.set_size(10)
+        return fd
 
 def guess_default_window_size(cols=80, rows=60):
     """
@@ -481,6 +519,7 @@ class MainInstance (ExportedGObject):
         self.connect("title-updated", self.on_note_title_updated)
         self.connect("note-opened", self.on_note_opened)
         self.metadata_service = NoteMetadataService()
+        self.config = Config()
         self.ready_to_display_notes = False
 
     def unregister(self):
@@ -824,6 +863,7 @@ class MainInstance (ExportedGObject):
         Setup basic data needed for displaying notes
         """
         self.metadata_service.load()
+        self.config.load()
         self.ready_to_display_notes = True
 
     def setup_gui(self):
@@ -1136,13 +1176,21 @@ class MainInstance (ExportedGObject):
 
 
         debug_log("Spawning", argv)
-        terminal = Vte.Terminal()
+        fd = self.config.get_font()
+        terminal = Vte.Terminal(scrollback_lines=0, font_desc=fd)
+        for name, f in [
+                ("background", terminal.set_color_background),
+                ("foreground", terminal.set_color_foreground),
+            ]:
+            color = self.config.get_color(name)
+            if color:
+                f(color)
         success, pid = terminal.spawn_sync(
             Vte.PtyFlags.DEFAULT,
             None,
             argv,
             None,
-            GLib.SpawnFlags.SEARCH_PATH, #| GLib.SpawnFlags.DO_NOT_REAP_CHILD,
+            GLib.SpawnFlags.SEARCH_PATH,
             None,
             None,
             None
@@ -1251,6 +1299,7 @@ def main(argv):
         return service_send_commandline(uargv, "", desktop_startup_id)
     lazy_import("uuid")
     lazy_import("Gtk", "gi.repository.Gtk")
+    lazy_import("Gdk", "gi.repository.Gdk")
     lazy_import("Gio", "gi.repository.Gio")
     lazy_import("Vte", "gi.repository.Vte")
     GLib.idle_add(m.setup_basic)
