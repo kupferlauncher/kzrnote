@@ -2,7 +2,7 @@
 # vim: sts=4 sw=4 et ft=python foldmethod=marker
 
 APPNAME = "kzrnote"
-VIM = 'vim'
+VIM_DEFAULT = 'vim'
 ICONNAME = 'kzrnote'
 VERSION='0.2'
 
@@ -434,6 +434,13 @@ class Config:
         except OSError as exc:
             error("When reading config:", exc)
             return
+
+    def get_vim(self):
+        vim = self.config.get("vim")
+        if isinstance(vim, str) and vim:
+            return vim
+        else:
+            return VIM_DEFAULT
 
     def get_color(self, name):
         fg = self.config.get("colors", {}).get(name)
@@ -1169,7 +1176,7 @@ class MainInstance (ExportedGObject):
         window = Gtk.Window()
         window.set_default_size(*guess_default_window_size())
 
-        argv = [VIM]
+        argv = [self.config.get_vim()]
         argv.extend(VIM_EXTRA_FLAGS)
         argv.extend(['-S', self.write_vimrc_file()])
         argv.extend(extra_args)
