@@ -116,7 +116,21 @@ DATA_ABOUT_NOTE="""\
 Configuring kzrnote
 ...................
 
-You can set kzrnote-specific settings in the
+You can edit terminal colors, font and vim executable
+in ~/.config/kzrnote/config.json
+
+Example::
+
+    {
+        "colors": {
+            "foreground": "black",
+            "background": "white"
+        },
+        "font": "DejaVu Sans Mono 10",
+        "vim": "vim"
+    }
+
+You can set kzrnote-specific vim settings in the
 file ~/.config/kzrnote/user.vim
 
 You can set::
