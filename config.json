@@ -1,7 +1,8 @@
 {
     "colors": {
         "foreground": "",
-        "background": ""
+        "background": "",
+        "palette": []
     },
     "font": "",
     "vim": "vim"

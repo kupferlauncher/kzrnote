@@ -435,6 +435,7 @@ class NoteMetadataService (object):  # {{{
         return self.geometries.get(note_uri, None)
 
 class Config:
+    palette_lengths = (0, 8, 16, 232, 256)
     def __init__(self):
         CONFIG = ensuredir(get_config_dir())
         self.filename = os.path.join(CONFIG, CONFIG_FILENAME)
@@ -461,12 +462,38 @@ class Config:
         fg = self.config.get("colors", {}).get(name)
         if fg is None:
             return None
+        return self.parse_color(fg)
+
+    @classmethod
+    def parse_color(cls, colorstring):
         c = Gdk.RGBA()
-        if isinstance(fg, str) and c.parse(fg):
+        if isinstance(colorstring, str) and c.parse(colorstring):
             return c
         else:
-            error("Could not parse color: %r" % (fg, ))
+            error("Could not parse color: %r" % (colorstring, ))
             return None
+
+    def get_palette(self):
+        palette = self.config.get("colors", {}).get("palette")
+        if palette is None:
+            return None
+        if isinstance(palette, str):
+            palette = palette.split(";")
+        if not isinstance(palette, list):
+            error("Palette must be a list: %r" % (palette, ))
+            return None
+        if len(palette) not in self.palette_lengths:
+            error("Palette must be one of lengths %r (found: %r)" % \
+                    (self.palette_lengths, len(palette)))
+            return None
+        res = []
+        for color in palette:
+            c = self.parse_color(color)
+            if c is None:
+                return None
+            res.append(c)
+        assert len(res) in self.palette_lengths
+        return res
 
     def get_font(self):
         font_desc = self.config.get("font")
@@ -1204,13 +1231,10 @@ class MainInstance (ExportedGObject):
         debug_log("Spawning", argv)
         fd = self.config.get_font()
         terminal = Vte.Terminal(scrollback_lines=0, font_desc=fd)
-        for name, f in [
-                ("background", terminal.set_color_background),
-                ("foreground", terminal.set_color_foreground),
-            ]:
-            color = self.config.get_color(name)
-            if color:
-                f(color)
+        fg = self.config.get_color("foreground")
+        bg = self.config.get_color("background")
+        palette = self.config.get_palette()
+        terminal.set_colors(fg, bg, palette)
         success, pid = terminal.spawn_sync(
             Vte.PtyFlags.DEFAULT,
             None,
