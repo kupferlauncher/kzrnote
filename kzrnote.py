@@ -1237,6 +1237,7 @@ class MainInstance (ExportedGObject):
                 os.kill(pid, signal.SIGTERM)
                 return True
         window.connect("delete-event", window_close)
+        terminal.connect("key-press-event", self.on_terminal_key_press_event)
 
         window.add(terminal)
         window.show_all()
@@ -1244,6 +1245,27 @@ class MainInstance (ExportedGObject):
 
     def on_spawn_child_setup(self):
         try_register_pr_pdeathsig()
+
+    def on_terminal_key_press_event(self, terminal, event):
+        # Intercept Ctrl + Shift + C/V for copy paste
+        keymap = Gdk.Keymap.get_default()
+        _was_bound, keyv, _egroup, level, consumed = keymap.translate_keyboard_state(
+                    event.hardware_keycode, event.get_state(), event.group)
+        all_modifiers = Gtk.accelerator_get_default_mod_mask()
+        ctrl_shift = ((event.get_state() & all_modifiers)
+                      == (Gdk.ModifierType.SHIFT_MASK | Gdk.ModifierType.CONTROL_MASK))
+
+        copy_key = Gdk.keyval_from_name("C")
+        paste_key = Gdk.keyval_from_name("V")
+        if ctrl_shift and keyv == paste_key:
+            debug_log("paste")
+            terminal.paste_clipboard()
+            return True
+        elif ctrl_shift and keyv == copy_key:
+            debug_log("copy")
+            terminal.copy_clipboard()
+            return True
+        return False
 
     def write_vimrc_file(self):
         ## make sure the swp/backup dir exists at this point
