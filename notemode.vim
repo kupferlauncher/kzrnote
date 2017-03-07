@@ -37,7 +37,11 @@ if $XDG_CONFIG_HOME == ''
     let $XDG_CONFIG_HOME = expand("~/.config")
 endif
 
-set viminfo+=n$XDG_CACHE_HOME/kzrnote/viminfo
+if has('nvim')
+    set shada+=n$XDG_CACHE_HOME/kzrnote/nvimshada
+else
+    set viminfo+=n$XDG_CACHE_HOME/kzrnote/viminfo
+endif
 
 
 if !exists('s:cache_mtime')
