@@ -10,6 +10,7 @@ VERSION='0.2'
 import importlib
 import locale
 import os
+import signal
 import sys
 import time
 import urllib.parse
@@ -1149,8 +1150,18 @@ class MainInstance (ExportedGObject):
         if not success:
             return None
         terminal.connect("child-exited", self.on_vim_exit, pid, window)
+
+        has_killed = False
         def window_close(window, event):
-            self.on_vim_exit(terminal, 1, pid, window)
+            nonlocal has_killed
+            if has_killed:
+                debug_log("Destroy window")
+                self.on_vim_exit(terminal, 1, pid, window)
+            else:
+                debug_log("Send kill -15", pid)
+                has_killed = True
+                os.kill(pid, signal.SIGTERM)
+                return True
         window.connect("delete-event", window_close)
 
         window.add(terminal)
