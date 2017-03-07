@@ -1161,10 +1161,14 @@ class MainInstance (ExportedGObject):
             else:
                 self.window.present()
         try:
-            for noteuri in arguments:
-                self.DisplayNote(noteuri)
+            for arg in arguments:
+                if arg == "--no-show":
+                    continue
+                elif arg.startswith("--"):
+                    error("Unknown argument", arg)
+                self.DisplayNote(arg)
         except ValueError as exc:
-            return "Argument %s: %s" % (noteuri, exc)
+            return "Argument %s: %s" % (arg, exc)
         return ""
 
     def handle_commandline_main(self, arguments, display, desktop_startup_id):
