@@ -26,7 +26,7 @@ from dbus.gi_service import ExportedGObject
 from dbus.mainloop.glib import DBusGMainLoop
 
 
-from gi.repository import GObject, GLib, Pango
+from gi.repository import GObject, GLib
 
 ## "Lazy imports"
 uuid = None
@@ -34,6 +34,7 @@ Gio = None
 Gdk = None
 Gtk = None
 Vte = None
+Pango = None
 
 debug = True
 
@@ -1323,10 +1324,8 @@ def main(argv):
         log("An instance already running, passing on commandline...")
         return service_send_commandline(uargv, "", desktop_startup_id)
     lazy_import("uuid")
-    lazy_import("Gtk", "gi.repository.Gtk")
-    lazy_import("Gdk", "gi.repository.Gdk")
-    lazy_import("Gio", "gi.repository.Gio")
-    lazy_import("Vte", "gi.repository.Vte")
+    for gi_mod in "Gtk Gdk Gio Vte Pango".split():
+        lazy_import(gi_mod, "gi.repository." + gi_mod)
     GLib.idle_add(m.setup_basic)
     GLib.idle_add(m.setup_gui)
     GLib.idle_add(m.handle_commandline_main, uargv, "", desktop_startup_id)
