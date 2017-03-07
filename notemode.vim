@@ -163,7 +163,7 @@ let s:kzrnote_object = '/io/github/kupferlauncher/kzrnote'
 let s:kzrnote_interface = 'io.github.kupferlauncher.kzrnote'
 
 function! KzrnoteMethod (method, arg, sender)
-    silent exe '!dbus-send' '--type=method_call' '--print-reply'
+    silent exe '!dbus-send' '--type=method_call'
      \ '--dest=' . s:kzrnote_service s:kzrnote_object
      \ s:kzrnote_interface . '.' . a:method
      \ 'string:' . a:arg 'string:' . a:sender
