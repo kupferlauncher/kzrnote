@@ -17,6 +17,7 @@ import subprocess
 
 import gi
 gi.require_version("Gtk", "3.0")
+gi.require_version("Vte", "2.91")
 
 import dbus
 from dbus.gi_service import ExportedGObject
@@ -29,6 +30,7 @@ from gi.repository import GObject, GLib
 uuid = None
 Gio = None
 Gtk = None
+Vte = None
 
 debug = True
 
@@ -1132,6 +1134,49 @@ class MainInstance (ExportedGObject):
 
         Return (window, preload_id)
         """
+        if is_preload:
+            return (None, None)
+
+        window = Gtk.Window()
+        window.set_default_size(*guess_default_window_size())
+        server_id = self.generate_vim_server_id()
+
+        argv = [VIM]
+        argv.extend(['--servername', server_id])
+        argv.extend(VIM_EXTRA_FLAGS)
+        argv.extend(['-c', 'so %s' % self.write_vimrc_file()])
+        argv.extend(extra_args)
+
+
+        debug_log("Spawning", argv)
+        terminal = Vte.Terminal()
+        success, pid = terminal.spawn_sync(
+            Vte.PtyFlags.DEFAULT,
+            None,
+            argv,
+            None,
+            GLib.SpawnFlags.SEARCH_PATH, #| GLib.SpawnFlags.DO_NOT_REAP_CHILD,
+            None,
+            None,
+            None
+        )
+        if not success:
+            return None
+        terminal.connect("child-exited", self.on_vim_exit, pid, window)
+        def window_close(window, event):
+            self.on_vim_exit(terminal, 1, pid, window)
+        window.connect("delete-event", window_close)
+
+        window.add(terminal)
+        window.show_all()
+        return window
+
+    def start_vim_hidden_old(self, extra_args=[], is_preload=False):
+        """
+        Open a new hidden Vim window
+
+        Return (window, preload_id)
+        """
         window = Gtk.Window()
         window.set_default_size(*guess_default_window_size())
         server_id = self.generate_vim_server_id()
@@ -1224,7 +1269,7 @@ class MainInstance (ExportedGObject):
         window.present()
         self.emit("note-opened", filepath, window)
 
-    def on_vim_exit(self, pid, condition, window):
+    def on_vim_exit(self, terminal, condition, pid, window):
         debug_log( "Vim Pid: %d  exited  (%x)" % (pid, condition))
         for k,v in list(self.open_files.items()):
             if v == window:
@@ -1278,6 +1323,7 @@ def main(argv):
     lazy_import("uuid")
     lazy_import("Gtk", "gi.repository.Gtk")
     lazy_import("Gio", "gi.repository.Gio")
+    lazy_import("Vte", "gi.repository.Vte")
     GLib.idle_add(m.setup_basic)
     GLib.idle_add(m.setup_gui)
     GLib.idle_add(m.handle_commandline_main, uargv, "", desktop_startup_id)
