@@ -894,7 +894,6 @@ class MainInstance (ExportedGObject):
             self.monitor.connect("changed",
                                  self.on_notes_monitor_changed,
                                  self.list_store)
-        self.preload()
         self.do_first_run()
 
     def do_first_run(self):
@@ -1116,17 +1115,6 @@ class MainInstance (ExportedGObject):
 
     # }}}
     # Embedding VIM {{{
-    @classmethod
-    def generate_vim_server_id(cls):
-        return "__%s_%s_" % (APPNAME, time.time())
-
-    def preload(self):
-        """
-        Open a new hidden Vim window
-        """
-        ## Update self.preload_ids in self.on_socket_plug_added when we
-        ## know that the preloaded window has "contact" with our proxy vim
-        self.start_vim_hidden([], is_preload=True)
 
     def start_vim_hidden(self, extra_args=[], is_preload=False):
         """
@@ -1139,7 +1127,6 @@ class MainInstance (ExportedGObject):
 
         window = Gtk.Window()
         window.set_default_size(*guess_default_window_size())
-        server_id = self.generate_vim_server_id()
 
         argv = [VIM]
         argv.extend(VIM_EXTRA_FLAGS)
@@ -1170,52 +1157,8 @@ class MainInstance (ExportedGObject):
         window.show_all()
         return window
 
-    def start_vim_hidden_old(self, extra_args=[], is_preload=False):
-        """
-        Open a new hidden Vim window
-
-        Return (window, preload_id)
-        """
-        window = Gtk.Window()
-        window.set_default_size(*guess_default_window_size())
-        server_id = self.generate_vim_server_id()
-
-        socket = Gtk.Socket()
-        window.realize()
-        window.add(socket)
-        socket.show()
-        socket.connect("plug-added", self.on_socket_plug_added,
-                       server_id, window, is_preload)
-
-
-        argv = [VIM, '-g', '-f', '--socketid', '%s' % socket.get_id()]
-        argv.extend(['--servername', server_id])
-        argv.extend(VIM_EXTRA_FLAGS)
-        argv.extend(['-c', 'so %s' % self.write_vimrc_file()])
-        argv.extend(extra_args)
-
-        debug_log("Spawning", argv)
-        pid, sin, sout, serr = \
-                GLib.spawn_async(argv, child_setup=self.on_spawn_child_setup,
-                         flags=GLib.SPAWN_SEARCH_PATH|GLib.SPAWN_DO_NOT_REAP_CHILD)
-        GLib.child_watch_add(pid, self.on_vim_exit, window)
-        return window
-
     def on_spawn_child_setup(self):
         try_register_pr_pdeathsig()
-
-    def on_socket_plug_added(self, socket, server_id, window, is_preload):
-        debug_log("Plug connected to Socket")
-        if is_preload:
-            ## delay registration just a bit longer
-            GLib.timeout_add(100, self.after_socket_plug_added,
-                             server_id, window)
-
-    def after_socket_plug_added(self, server_id, window):
-        debug_log("Registering %r as ready" % server_id)
-        ## put the returned window in the preload table
-        self.preload_ids[server_id] = window
-        return False
 
     def write_vimrc_file(self):
         ## make sure the swp/backup dir exists at this point
@@ -1229,26 +1172,6 @@ class MainInstance (ExportedGObject):
             runtimefobj.write(CONFIG_RCTEXT)
         return rpath
 
-    def new_vimdow_preloaded(self, name, filepath):
-        if not self.preload_ids:
-            raise RuntimeError("No Preloaded instances found!")
-        preload_id, window = self.preload_ids.popitem()
-        window.set_title(name)
-        self.open_files[filepath] = window
-
-        ## Note: Filename requires escaping (but our defaults are safe ones)
-        preload_argv = [VIM, '-g', '-f', '--servername', preload_id,
-                        '--remote-send', '<ESC>:e %s<CR><CR>' % filepath]
-
-        debug_log("Using preloaded", preload_argv)
-        ## watch this process
-        pid, sin, sout, serr = GLib.spawn_async(preload_argv,
-                      flags=GLib.SPAWN_SEARCH_PATH|GLib.SPAWN_DO_NOT_REAP_CHILD)
-        GLib.child_watch_add(pid, self.on_vim_remote_exit, preload_argv)
-        self.position_window(window, filepath)
-        window.present()
-        self.emit("note-opened", filepath, window)
-
     def on_vim_remote_exit(self, pid, condition, preload_argv):
         exit_status = os.WEXITSTATUS(condition)
         debug_log(" vim --remote exited with status", exit_status)
@@ -1257,10 +1180,6 @@ class MainInstance (ExportedGObject):
             #GLib.timeout_add(800, self._respawn_again, preload_argv)
 
     def new_vimdow(self, name, filepath):
-        if self.preload_ids:
-            self.new_vimdow_preloaded(name, filepath)
-            GLib.timeout_add_seconds(1, self.preload)
-            return
         window = self.start_vim_hidden(['-c', 'e %s' % filepath])
         self.open_files[filepath] = window
         window.set_title(name)
