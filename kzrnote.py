@@ -125,11 +125,15 @@ Example::
     {
         "colors": {
             "foreground": "black",
-            "background": "white"
+            "background": "white",
+            "palette": []
         },
         "font": "DejaVu Sans Mono 10",
         "vim": "vim"
     }
+
+Where palette is a list of 8, 16, 232 or 256 colors.
+(Can also be one string with ; separator).
 
 You can set kzrnote-specific vim settings in the
 file ~/.config/kzrnote/user.vim
