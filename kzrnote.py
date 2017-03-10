@@ -1361,6 +1361,9 @@ def main(argv):
         uargv.pop(0)
         global debug
         debug = True
+    elif uargv and uargv[0] == '--version':
+        print(VERSION)
+        sys.exit(0)
     else:
         debug = False
     desktop_startup_id = os.getenv("DESKTOP_STARTUP_ID", "")
