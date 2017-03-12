@@ -37,6 +37,13 @@ if $XDG_CONFIG_HOME == ''
     let $XDG_CONFIG_HOME = expand("~/.config")
 endif
 
+if has('nvim')
+    set shada+=n$XDG_CACHE_HOME/kzrnote/nvimshada
+else
+    set viminfo+=n$XDG_CACHE_HOME/kzrnote/viminfo
+endif
+
+
 if !exists('s:cache_mtime')
     let s:have_cached_names = 0
     let s:have_cached_titles = 0
@@ -163,7 +170,7 @@ let s:kzrnote_object = '/io/github/kupferlauncher/kzrnote'
 let s:kzrnote_interface = 'io.github.kupferlauncher.kzrnote'
 
 function! KzrnoteMethod (method, arg, sender)
-    silent exe '!dbus-send' '--type=method_call' '--print-reply'
+    silent exe '!dbus-send' '--type=method_call'
      \ '--dest=' . s:kzrnote_service s:kzrnote_object
      \ s:kzrnote_interface . '.' . a:method
      \ 'string:' . a:arg 'string:' . a:sender

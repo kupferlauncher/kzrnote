@@ -58,5 +58,7 @@ if they need to be set to non-default values.
 
   + Python 3
   + Gtk 3, pygi
+  + Vte 2.91
+  + dbus-python
 
 .. vim: ft=rst tw=76 sts=4

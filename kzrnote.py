@@ -2,14 +2,16 @@
 # vim: sts=4 sw=4 et ft=python foldmethod=marker
 
 APPNAME = "kzrnote"
-VIM = 'vim'
+VIM_DEFAULT = 'vim'
 ICONNAME = 'kzrnote'
 VERSION='0.2'
 
 # Preamble {{{
 import importlib
+import json
 import locale
 import os
+import signal
 import sys
 import time
 import urllib.parse
@@ -17,6 +19,7 @@ import subprocess
 
 import gi
 gi.require_version("Gtk", "3.0")
+gi.require_version("Vte", "2.91")
 
 import dbus
 from dbus.gi_service import ExportedGObject
@@ -28,7 +31,10 @@ from gi.repository import GObject, GLib
 ## "Lazy imports"
 uuid = None
 Gio = None
+Gdk = None
 Gtk = None
+Vte = None
+Pango = None
 
 debug = True
 
@@ -78,6 +84,7 @@ so ./notemode.vim
 """
 CONFIG_USERRC="user.vim"
 CONFIG_VIMRC="%s.vim" % APPNAME
+CONFIG_FILENAME="config.json"
 VIM_EXTRA_FLAGS=[]
 
 DATA_WELCOME_NOTE="""\
@@ -110,7 +117,25 @@ DATA_ABOUT_NOTE="""\
 Configuring kzrnote
 ...................
 
-You can set kzrnote-specific settings in the
+You can edit terminal colors, font and vim executable
+in ~/.config/kzrnote/config.json
+
+Example::
+
+    {
+        "colors": {
+            "foreground": "black",
+            "background": "white",
+            "palette": []
+        },
+        "font": "DejaVu Sans Mono 10",
+        "vim": "vim"
+    }
+
+Where palette is a list of 8, 16, 232 or 256 colors.
+(Can also be one string with ; separator).
+
+You can set kzrnote-specific vim settings in the
 file ~/.config/kzrnote/user.vim
 
 You can set::
@@ -413,6 +438,75 @@ class NoteMetadataService (object):  # {{{
         note_uri = get_note_uri(notefilename)
         return self.geometries.get(note_uri, None)
 
+class Config:
+    palette_lengths = (0, 8, 16, 232, 256)
+    def __init__(self):
+        CONFIG = ensuredir(get_config_dir())
+        self.filename = os.path.join(CONFIG, CONFIG_FILENAME)
+        self.config = {}
+
+    def load(self):
+        try:
+            with open(self.filename) as f:
+                self.config = json.load(f)
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            error("When reading config:", exc)
+            return
+
+    def get_vim(self):
+        vim = self.config.get("vim")
+        if isinstance(vim, str) and vim:
+            return vim
+        else:
+            return VIM_DEFAULT
+
+    def get_color(self, name):
+        fg = self.config.get("colors", {}).get(name)
+        if fg is None:
+            return None
+        return self.parse_color(fg)
+
+    @classmethod
+    def parse_color(cls, colorstring):
+        c = Gdk.RGBA()
+        if isinstance(colorstring, str) and c.parse(colorstring):
+            return c
+        else:
+            error("Could not parse color: %r" % (colorstring, ))
+            return None
+
+    def get_palette(self):
+        palette = self.config.get("colors", {}).get("palette")
+        if palette is None:
+            return None
+        if isinstance(palette, str):
+            palette = palette.split(";")
+        if not isinstance(palette, list):
+            error("Palette must be a list: %r" % (palette, ))
+            return None
+        if len(palette) not in self.palette_lengths:
+            error("Palette must be one of lengths %r (found: %r)" % \
+                    (self.palette_lengths, len(palette)))
+            return None
+        res = []
+        for color in palette:
+            c = self.parse_color(color)
+            if c is None:
+                return None
+            res.append(c)
+        assert len(res) in self.palette_lengths
+        return res
+
+    def get_font(self):
+        font_desc = self.config.get("font")
+        if not font_desc or not isinstance(font_desc, str):
+            return None
+        fd = Pango.FontDescription.from_string(font_desc)
+        if not fd.get_size():
+            fd.set_size(10)
+        return fd
 
 def guess_default_window_size(cols=80, rows=60):
     """
@@ -478,6 +572,7 @@ class MainInstance (ExportedGObject):
         self.connect("title-updated", self.on_note_title_updated)
         self.connect("note-opened", self.on_note_opened)
         self.metadata_service = NoteMetadataService()
+        self.config = Config()
         self.ready_to_display_notes = False
 
     def unregister(self):
@@ -821,6 +916,7 @@ class MainInstance (ExportedGObject):
         Setup basic data needed for displaying notes
         """
         self.metadata_service.load()
+        self.config.load()
         self.ready_to_display_notes = True
 
     def setup_gui(self):
@@ -892,7 +988,6 @@ class MainInstance (ExportedGObject):
             self.monitor.connect("changed",
                                  self.on_notes_monitor_changed,
                                  self.list_store)
-        self.preload()
         self.do_first_run()
 
     def do_first_run(self):
@@ -1098,10 +1193,14 @@ class MainInstance (ExportedGObject):
             else:
                 self.window.present()
         try:
-            for noteuri in arguments:
-                self.DisplayNote(noteuri)
+            for arg in arguments:
+                if arg == "--no-show":
+                    continue
+                elif arg.startswith("--"):
+                    error("Unknown argument", arg)
+                self.DisplayNote(arg)
         except ValueError as exc:
-            return "Argument %s: %s" % (noteuri, exc)
+            return "Argument %s: %s" % (arg, exc)
         return ""
 
     def handle_commandline_main(self, arguments, display, desktop_startup_id):
@@ -1114,17 +1213,6 @@ class MainInstance (ExportedGObject):
 
     # }}}
     # Embedding VIM {{{
-    @classmethod
-    def generate_vim_server_id(cls):
-        return "__%s_%s_" % (APPNAME, time.time())
-
-    def preload(self):
-        """
-        Open a new hidden Vim window
-        """
-        ## Update self.preload_ids in self.on_socket_plug_added when we
-        ## know that the preloaded window has "contact" with our proxy vim
-        self.start_vim_hidden([], is_preload=True)
 
     def start_vim_hidden(self, extra_args=[], is_preload=False):
         """
@@ -1132,45 +1220,79 @@ class MainInstance (ExportedGObject):
 
         Return (window, preload_id)
         """
+        if is_preload:
+            return (None, None)
+
         window = Gtk.Window()
         window.set_default_size(*guess_default_window_size())
-        server_id = self.generate_vim_server_id()
 
-        socket = Gtk.Socket()
-        window.realize()
-        window.add(socket)
-        socket.show()
-        socket.connect("plug-added", self.on_socket_plug_added,
-                       server_id, window, is_preload)
-
-
-        argv = [VIM, '-g', '-f', '--socketid', '%s' % socket.get_id()]
-        argv.extend(['--servername', server_id])
+        argv = [self.config.get_vim()]
         argv.extend(VIM_EXTRA_FLAGS)
-        argv.extend(['-c', 'so %s' % self.write_vimrc_file()])
+        argv.extend(['-S', self.write_vimrc_file()])
         argv.extend(extra_args)
 
+
         debug_log("Spawning", argv)
-        pid, sin, sout, serr = \
-                GLib.spawn_async(argv, child_setup=self.on_spawn_child_setup,
-                         flags=GLib.SPAWN_SEARCH_PATH|GLib.SPAWN_DO_NOT_REAP_CHILD)
-        GLib.child_watch_add(pid, self.on_vim_exit, window)
+        fd = self.config.get_font()
+        terminal = Vte.Terminal(scrollback_lines=0, font_desc=fd)
+        fg = self.config.get_color("foreground")
+        bg = self.config.get_color("background")
+        palette = self.config.get_palette()
+        terminal.set_colors(fg, bg, palette)
+        success, pid = terminal.spawn_sync(
+            Vte.PtyFlags.DEFAULT,
+            None,
+            argv,
+            None,
+            GLib.SpawnFlags.SEARCH_PATH,
+            None,
+            None,
+            None
+        )
+        if not success:
+            return None
+        terminal.connect("child-exited", self.on_vim_exit, pid, window)
+
+        has_killed = False
+        def window_close(window, event):
+            nonlocal has_killed
+            if has_killed:
+                debug_log("Destroy window")
+                self.on_vim_exit(terminal, 1, pid, window)
+            else:
+                debug_log("Send kill -15", pid)
+                has_killed = True
+                os.kill(pid, signal.SIGTERM)
+                return True
+        window.connect("delete-event", window_close)
+        terminal.connect("key-press-event", self.on_terminal_key_press_event)
+
+        window.add(terminal)
+        terminal.show()
         return window
 
     def on_spawn_child_setup(self):
         try_register_pr_pdeathsig()
 
-    def on_socket_plug_added(self, socket, server_id, window, is_preload):
-        debug_log("Plug connected to Socket")
-        if is_preload:
-            ## delay registration just a bit longer
-            GLib.timeout_add(100, self.after_socket_plug_added,
-                             server_id, window)
+    def on_terminal_key_press_event(self, terminal, event):
+        # Intercept Ctrl + Shift + C/V for copy paste
+        keymap = Gdk.Keymap.get_default()
+        _was_bound, keyv, _egroup, level, consumed = keymap.translate_keyboard_state(
+                    event.hardware_keycode, event.get_state(), event.group)
+        all_modifiers = Gtk.accelerator_get_default_mod_mask()
+        ctrl_shift = ((event.get_state() & all_modifiers)
+                      == (Gdk.ModifierType.SHIFT_MASK | Gdk.ModifierType.CONTROL_MASK))
 
-    def after_socket_plug_added(self, server_id, window):
-        debug_log("Registering %r as ready" % server_id)
-        ## put the returned window in the preload table
-        self.preload_ids[server_id] = window
+        copy_key = Gdk.keyval_from_name("C")
+        paste_key = Gdk.keyval_from_name("V")
+        if ctrl_shift and keyv == paste_key:
+            debug_log("paste")
+            terminal.paste_clipboard()
+            return True
+        elif ctrl_shift and keyv == copy_key:
+            debug_log("copy")
+            terminal.copy_clipboard()
+            return True
         return False
 
     def write_vimrc_file(self):
@@ -1185,26 +1307,6 @@ class MainInstance (ExportedGObject):
             runtimefobj.write(CONFIG_RCTEXT)
         return rpath
 
-    def new_vimdow_preloaded(self, name, filepath):
-        if not self.preload_ids:
-            raise RuntimeError("No Preloaded instances found!")
-        preload_id, window = self.preload_ids.popitem()
-        window.set_title(name)
-        self.open_files[filepath] = window
-
-        ## Note: Filename requires escaping (but our defaults are safe ones)
-        preload_argv = [VIM, '-g', '-f', '--servername', preload_id,
-                        '--remote-send', '<ESC>:e %s<CR><CR>' % filepath]
-
-        debug_log("Using preloaded", preload_argv)
-        ## watch this process
-        pid, sin, sout, serr = GLib.spawn_async(preload_argv,
-                      flags=GLib.SPAWN_SEARCH_PATH|GLib.SPAWN_DO_NOT_REAP_CHILD)
-        GLib.child_watch_add(pid, self.on_vim_remote_exit, preload_argv)
-        self.position_window(window, filepath)
-        window.present()
-        self.emit("note-opened", filepath, window)
-
     def on_vim_remote_exit(self, pid, condition, preload_argv):
         exit_status = os.WEXITSTATUS(condition)
         debug_log(" vim --remote exited with status", exit_status)
@@ -1213,10 +1315,6 @@ class MainInstance (ExportedGObject):
             #GLib.timeout_add(800, self._respawn_again, preload_argv)
 
     def new_vimdow(self, name, filepath):
-        if self.preload_ids:
-            self.new_vimdow_preloaded(name, filepath)
-            GLib.timeout_add_seconds(1, self.preload)
-            return
         window = self.start_vim_hidden(['-c', 'e %s' % filepath])
         self.open_files[filepath] = window
         window.set_title(name)
@@ -1224,7 +1322,7 @@ class MainInstance (ExportedGObject):
         window.present()
         self.emit("note-opened", filepath, window)
 
-    def on_vim_exit(self, pid, condition, window):
+    def on_vim_exit(self, terminal, condition, pid, window):
         debug_log( "Vim Pid: %d  exited  (%x)" % (pid, condition))
         for k,v in list(self.open_files.items()):
             if v == window:
@@ -1263,6 +1361,9 @@ def main(argv):
         uargv.pop(0)
         global debug
         debug = True
+    elif uargv and uargv[0] == '--version':
+        print(VERSION)
+        sys.exit(0)
     else:
         debug = False
     desktop_startup_id = os.getenv("DESKTOP_STARTUP_ID", "")
@@ -1276,8 +1377,8 @@ def main(argv):
         log("An instance already running, passing on commandline...")
         return service_send_commandline(uargv, "", desktop_startup_id)
     lazy_import("uuid")
-    lazy_import("Gtk", "gi.repository.Gtk")
-    lazy_import("Gio", "gi.repository.Gio")
+    for gi_mod in "Gtk Gdk Gio Vte Pango".split():
+        lazy_import(gi_mod, "gi.repository." + gi_mod)
     GLib.idle_add(m.setup_basic)
     GLib.idle_add(m.setup_gui)
     GLib.idle_add(m.handle_commandline_main, uargv, "", desktop_startup_id)
