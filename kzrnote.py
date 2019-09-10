@@ -531,16 +531,16 @@ object_name = "/io/github/kupferlauncher/%s" % APPNAME
 
 class MainInstance (ExportedGObject):
     __gsignals__ = {
-        "note-created": (GObject.SIGNAL_RUN_FIRST, GObject.TYPE_NONE,
+        "note-created": (GObject.SignalFlags.RUN_FIRST, GObject.TYPE_NONE,
             (GObject.TYPE_STRING, )),
         ## signature: filepath, bool:user_action
-        "note-deleted": (GObject.SIGNAL_RUN_FIRST, GObject.TYPE_NONE,
+        "note-deleted": (GObject.SignalFlags.RUN_FIRST, GObject.TYPE_NONE,
             (GObject.TYPE_STRING, GObject.TYPE_BOOLEAN)),
-        "title-updated": (GObject.SIGNAL_RUN_FIRST, GObject.TYPE_NONE,
+        "title-updated": (GObject.SignalFlags.RUN_FIRST, GObject.TYPE_NONE,
             (GObject.TYPE_STRING, GObject.TYPE_STRING )),
-        "note-contents-changed": (GObject.SIGNAL_RUN_FIRST, GObject.TYPE_NONE,
+        "note-contents-changed": (GObject.SignalFlags.RUN_FIRST, GObject.TYPE_NONE,
             (GObject.TYPE_STRING, )),
-        "note-opened": (GObject.SIGNAL_RUN_FIRST, GObject.TYPE_NONE,
+        "note-opened": (GObject.SignalFlags.RUN_FIRST, GObject.TYPE_NONE,
             (GObject.TYPE_STRING, GObject.TYPE_PYOBJECT)),
         ## signature: filename, GtkWindow
     }
@@ -950,15 +950,15 @@ class MainInstance (ExportedGObject):
             return key not in model.get_value(miter, column).lower()
         self.list_view.set_search_equal_func(search_cmp)
         toolbar = Gtk.Toolbar()
-        new = Gtk.ToolButton(Gtk.STOCK_NEW)
+        new = Gtk.ToolButton(stock_id=Gtk.STOCK_NEW)
         new.set_label(_("Create _New Note"))
         new.set_use_underline(True)
         new.set_is_important(True)
         new.connect("clicked", self.create_open_note)
-        delete = Gtk.ToolButton(Gtk.STOCK_DELETE)
+        delete = Gtk.ToolButton(stock_id=Gtk.STOCK_DELETE)
         delete.connect("clicked", self.on_delete_row_cliecked, self.list_view)
         delete.set_is_important(True)
-        quit = Gtk.ToolButton(Gtk.STOCK_QUIT)
+        quit = Gtk.ToolButton(stock_id=Gtk.STOCK_QUIT)
         quit.set_is_important(True)
         quit.connect("clicked", Gtk.main_quit)
         def toolbar_append(item):
