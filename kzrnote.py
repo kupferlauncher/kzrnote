@@ -387,6 +387,27 @@ def try_register_pr_pdeathsig():
     except (AttributeError, OSError):
         pass
 
+class OnceCallback:
+    """
+    Callback that can be registered many times, but is only actually called
+    once.
+    """
+    _active_callbacks = {}
+    def __init__(self, name, function):
+        """
+        name of this function invocation - calls are deduplicated by name
+        """
+        self._name = name
+        self._active_callbacks[name] = function
+
+    def __call__(self, *args, **kwargs):
+        try:
+            function = self._active_callbacks.pop(self._name)
+        except KeyError:
+            return None
+        return function(*args, **kwargs)
+
+
 # }}}
 class NoteMetadataService (object):  # {{{
     def __init__(self):
@@ -1109,7 +1130,9 @@ class MainInstance (ExportedGObject):
         if filepath in self.open_files:
             title = self.get_window_title_for_note_title(new_title)
             self.open_files[filepath].set_title(title)
-        ## write out all titles to a cache file
+        GLib.idle_add(OnceCallback("after_note_title_updated", self.after_note_title_updated))
+
+    def after_note_title_updated(self):
         cache = ensuredir(get_cache_dir())
         with opennote(os.path.join(cache, CACHE_NOTETITLES), "w") as fobj:
             for filepath in self.get_note_filenames(False):
